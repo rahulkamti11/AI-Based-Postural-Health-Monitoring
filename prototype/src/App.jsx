@@ -5,6 +5,8 @@ import InfoBanner from './components/InfoBanner';
 
 export default function App() {
   const [availableDevices, setAvailableDevices] = useState([]);
+  const [systemActive, setSystemActive] = useState(false); // Turned OFF by default on load
+
   const [cam1DeviceId, setCam1DeviceId] = useState('');
   const [cam2DeviceId, setCam2DeviceId] = useState('');
   const [cam3DeviceId, setCam3DeviceId] = useState('');
@@ -13,7 +15,7 @@ export default function App() {
   const [cam2Fps, setCam2Fps] = useState(0);
   const [cam3Fps, setCam3Fps] = useState(0);
 
-  // Scan for connected camera devices safely
+  // Scan for connected camera devices safely with smart brand/label matching
   const refreshDevices = useCallback(async () => {
     try {
       let devices = await navigator.mediaDevices.enumerateDevices();
@@ -34,26 +36,35 @@ export default function App() {
       setAvailableDevices(videoDevices);
 
       if (videoDevices.length > 0) {
+        // 1. Identify PC Built-in Laptop Camera (non-Iriun / non-DroidCam)
+        const builtInCam = videoDevices.find(d => {
+          const label = (d.label || '').toLowerCase();
+          const isVirtual = label.includes('iriun') || label.includes('droidcam') || label.includes('virtual');
+          return !isVirtual;
+        }) || videoDevices[0];
+
+        // 2. Identify External Mobile/Iriun/DroidCam Cameras
+        const externalCams = videoDevices.filter(d => d.deviceId !== builtInCam.deviceId);
+
+        // Assign Camera 1 (Front View - Center): ALWAYS Laptop Built-in Camera
         if (!cam1DeviceId || !videoDevices.some(d => d.deviceId === cam1DeviceId)) {
-          setCam1DeviceId(videoDevices[0].deviceId);
+          setCam1DeviceId(builtInCam.deviceId);
         }
+
+        // Assign Camera 2 (Left-Side View): External Cam 1 (e.g. Iriun Webcam 1)
         if (!cam2DeviceId || !videoDevices.some(d => d.deviceId === cam2DeviceId)) {
-          setCam2DeviceId(videoDevices.length > 1 ? videoDevices[1].deviceId : videoDevices[0].deviceId);
+          setCam2DeviceId(externalCams.length > 0 ? externalCams[0].deviceId : '');
         }
+
+        // Assign Camera 3 (Right-Side View): External Cam 2 (e.g. Iriun Webcam #2)
         if (!cam3DeviceId || !videoDevices.some(d => d.deviceId === cam3DeviceId)) {
-          if (videoDevices.length > 2) {
-            setCam3DeviceId(videoDevices[2].deviceId);
-          } else if (videoDevices.length > 1) {
-            setCam3DeviceId(videoDevices[1].deviceId);
-          } else {
-            setCam3DeviceId(videoDevices[0].deviceId);
-          }
+          setCam3DeviceId(externalCams.length > 1 ? externalCams[1].deviceId : '');
         }
       } else {
-        // Fallback default trigger so getUserMedia({ video: true }) still runs
+        // Fallback: Default ID ONLY for Cam 1 (Laptop Built-in Camera)
         setCam1DeviceId('default');
-        setCam2DeviceId('default');
-        setCam3DeviceId('default');
+        setCam2DeviceId('');
+        setCam3DeviceId('');
       }
     } catch (err) {
       console.error('Error scanning video devices:', err);
@@ -66,51 +77,53 @@ export default function App() {
 
   return (
     <div className="app-container">
-      {/* Header Bar */}
+      {/* Header Bar with System Start/Stop Toggle (Off by default) */}
       <Header
+        systemActive={systemActive}
+        onToggleSystem={() => setSystemActive(prev => !prev)}
         onRefreshDevices={refreshDevices}
         availableDevicesCount={availableDevices.length}
       />
 
-      {/* 3-Camera Preview Grid: [Left-Side | Front (Center) | Right-Side] */}
+      {/* 3-Camera Preview Grid: [Left-Side (Cam 2) | Front Center (Cam 1) | Right-Side (Cam 3)] */}
       <div className="camera-grid">
-        {/* Left Column: Left-Side View */}
+        {/* Left Column: Left-Side View (Cam 2 - Iriun Webcam 1) */}
         <CameraCard
           camId="cam2"
           tagLabel="CAM 2"
           tagClass="tag-cam2"
           title="Camera 2 (Left-Side View)"
-          subtitle="Captures left neck angle & slouch inclination"
           availableDevices={availableDevices}
           selectedDeviceId={cam2DeviceId}
           onSelectDevice={setCam2DeviceId}
           onFpsUpdate={setCam2Fps}
+          systemActive={systemActive}
         />
 
-        {/* Center Column: Front View */}
+        {/* Center Column: Front View (Cam 1 - Laptop Built-in Camera) */}
         <CameraCard
           camId="cam1"
           tagLabel="CAM 1"
           tagClass="tag-cam1"
           title="Camera 1 (Front View)"
-          subtitle="Captures front body alignment & shoulder tilt"
           availableDevices={availableDevices}
           selectedDeviceId={cam1DeviceId}
           onSelectDevice={setCam1DeviceId}
           onFpsUpdate={setCam1Fps}
+          systemActive={systemActive}
         />
 
-        {/* Right Column: Right-Side View */}
+        {/* Right Column: Right-Side View (Cam 3 - Iriun Webcam #2) */}
         <CameraCard
           camId="cam3"
           tagLabel="CAM 3"
           tagClass="tag-cam3"
           title="Camera 3 (Right-Side View)"
-          subtitle="Captures right neck angle & slouch inclination"
           availableDevices={availableDevices}
           selectedDeviceId={cam3DeviceId}
           onSelectDevice={setCam3DeviceId}
           onFpsUpdate={setCam3Fps}
+          systemActive={systemActive}
         />
       </div>
 

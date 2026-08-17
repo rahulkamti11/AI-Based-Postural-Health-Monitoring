@@ -135,12 +135,26 @@ body::before {
   color: var(--primary-emerald);
 }
 
+.status-badge-clean.status-stopped {
+  background: #fff1f2;
+  border-color: #fecdd3;
+  color: var(--primary-rose);
+}
+
 .status-dot-green {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background-color: var(--primary-emerald);
   box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.2);
+}
+
+.status-dot-red {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--primary-rose);
+  box-shadow: 0 0 0 3px rgba(225, 29, 72, 0.2);
 }
 
 .btn-clean {
@@ -176,6 +190,28 @@ body::before {
   background: #4338ca;
   border-color: #4338ca;
   color: #ffffff;
+}
+
+.btn-clean-stop {
+  background: #fff1f2;
+  color: var(--primary-rose);
+  border: 1px solid #fecdd3;
+}
+
+.btn-clean-stop:hover {
+  background: #ffe4e6;
+  border-color: #fda4af;
+}
+
+.btn-clean-start {
+  background: #ecfdf5;
+  color: var(--primary-emerald);
+  border: 1px solid #a7f3d0;
+}
+
+.btn-clean-start:hover {
+  background: #d1fae5;
+  border-color: #6ee7b7;
 }
 
 /* 3-Camera Grid */
@@ -251,18 +287,24 @@ body::before {
   color: var(--text-main);
 }
 
-.camera-subtitle {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  margin-top: 1px;
+/* Header Row 2 - Dropdown + Power Button side-by-side */
+.camera-header-row2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
 }
 
-/* Device Dropdown */
 .device-select-wrapper {
   position: relative;
   display: flex;
   align-items: center;
-  width: 100%;
+  flex: 1;
+}
+
+.power-toggle-btn {
+  flex-shrink: 0;
+  padding: 8px 12px;
 }
 
 .device-select {
