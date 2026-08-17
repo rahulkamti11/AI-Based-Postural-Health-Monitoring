@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Header from './components/Header';
-import StatsBar from './components/StatsBar';
 import CameraCard from './components/CameraCard';
 import InfoBanner from './components/InfoBanner';
 
@@ -14,30 +13,33 @@ export default function App() {
   const [cam2Fps, setCam2Fps] = useState(0);
   const [cam3Fps, setCam3Fps] = useState(0);
 
-  // Scan for connected camera devices
+  // Scan for connected camera devices safely
   const refreshDevices = useCallback(async () => {
     try {
-      // Request initial permission so device labels are visible
-      const initialStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-      initialStream.getTracks().forEach(t => t.stop());
+      let devices = await navigator.mediaDevices.enumerateDevices();
+      let videoDevices = devices.filter(dev => dev.kind === 'videoinput');
 
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const videoDevices = devices.filter(dev => dev.kind === 'videoinput');
+      // Request permission if labels are hidden/empty
+      if (videoDevices.length === 0 || videoDevices.some(d => !d.label)) {
+        try {
+          const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
+          tempStream.getTracks().forEach(t => t.stop());
+          devices = await navigator.mediaDevices.enumerateDevices();
+          videoDevices = devices.filter(dev => dev.kind === 'videoinput');
+        } catch (permErr) {
+          console.warn('Initial camera permission prompt deferred or rejected:', permErr);
+        }
+      }
+
       setAvailableDevices(videoDevices);
 
       if (videoDevices.length > 0) {
-        // Smart Default Assignment for 3 Cameras
-        // Camera 1 (Front View - Center): Device 0
         if (!cam1DeviceId || !videoDevices.some(d => d.deviceId === cam1DeviceId)) {
           setCam1DeviceId(videoDevices[0].deviceId);
         }
-
-        // Camera 2 (Left-Side View - Left): Device 1 if available, else Device 0
         if (!cam2DeviceId || !videoDevices.some(d => d.deviceId === cam2DeviceId)) {
           setCam2DeviceId(videoDevices.length > 1 ? videoDevices[1].deviceId : videoDevices[0].deviceId);
         }
-
-        // Camera 3 (Right-Side View - Right): Device 2 if available, else Device 0 or 1
         if (!cam3DeviceId || !videoDevices.some(d => d.deviceId === cam3DeviceId)) {
           if (videoDevices.length > 2) {
             setCam3DeviceId(videoDevices[2].deviceId);
@@ -47,6 +49,11 @@ export default function App() {
             setCam3DeviceId(videoDevices[0].deviceId);
           }
         }
+      } else {
+        // Fallback default trigger so getUserMedia({ video: true }) still runs
+        setCam1DeviceId('default');
+        setCam2DeviceId('default');
+        setCam3DeviceId('default');
       }
     } catch (err) {
       console.error('Error scanning video devices:', err);
@@ -63,16 +70,6 @@ export default function App() {
       <Header
         onRefreshDevices={refreshDevices}
         availableDevicesCount={availableDevices.length}
-      />
-
-      {/* Quick Statistics Bar */}
-      <StatsBar
-        cam1Active={!!cam1DeviceId}
-        cam2Active={!!cam2DeviceId}
-        cam3Active={!!cam3DeviceId}
-        cam1Fps={cam1Fps}
-        cam2Fps={cam2Fps}
-        cam3Fps={cam3Fps}
       />
 
       {/* 3-Camera Preview Grid: [Left-Side | Front (Center) | Right-Side] */}
