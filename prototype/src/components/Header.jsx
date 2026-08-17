@@ -1,39 +1,37 @@
 import React from 'react';
-import { Cpu, RefreshCw, Radio, Terminal } from 'lucide-react';
+import { Activity, RefreshCw, Smartphone } from 'lucide-react';
 
 export default function Header({ onRefreshDevices, availableDevicesCount }) {
   return (
-    <header className="tactical-panel header-container">
+    <header className="clean-card header-container">
       <div className="header-title-area">
         <div className="header-icon-box">
-          <Cpu size={26} />
+          <Activity size={24} />
         </div>
         <div>
-          <h1 className="header-title">POSTURE AI // MULTI-VIEW TACTICAL VISION</h1>
-          <p className="header-subtitle">
-            [SYS.MODE: 3-CAM FEATURE FUSION] &nbsp;|&nbsp; [CORE: MEDIAPIPE_POSE_V1]
-          </p>
+          <h1 className="header-title">AI Posture & Postural Health Monitor</h1>
+          <p className="header-subtitle">3-Camera Real-Time Vision & Feature Fusion Dashboard</p>
         </div>
       </div>
 
       <div className="header-actions">
-        <div className="status-badge-tactical">
-          <span className="status-dot-pulse"></span>
-          <span>ONLINE // 3-CAM ACTIVE</span>
+        <div className="status-badge-clean">
+          <span className="status-dot-green"></span>
+          <span>3-Camera Vision Active</span>
         </div>
 
         <button 
-          className="btn-tactical" 
+          className="btn-clean" 
           onClick={onRefreshDevices} 
-          title="Rescan connected hardware (USB Mobile / PC Webcams)"
+          title="Rescan connected cameras (USB Mobile / PC Webcams)"
         >
           <RefreshCw size={16} />
-          <span>RESCAN CAMERAS [{availableDevicesCount}]</span>
+          <span>Rescan Cameras ({availableDevicesCount})</span>
         </button>
 
-        <div className="btn-tactical btn-tactical-amber">
-          <Radio size={16} />
-          <span>3-CAM MULTI-FEED</span>
+        <div className="btn-clean btn-clean-primary">
+          <Smartphone size={16} />
+          <span>USB Mobile + PC Cam</span>
         </div>
       </div>
     </header>

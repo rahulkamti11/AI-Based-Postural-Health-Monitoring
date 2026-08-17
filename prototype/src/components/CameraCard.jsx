@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ChevronDown, Eye, EyeOff, FlipHorizontal, Video, VideoOff, Maximize2, Minimize2 } from 'lucide-react';
+import { ChevronDown, Eye, EyeOff, FlipHorizontal, VideoOff, Maximize2, Minimize2 } from 'lucide-react';
 import { Pose } from '@mediapipe/pose';
 
 // MediaPipe 33 Pose Landmark standard connections
@@ -94,13 +94,28 @@ export default function CameraCard({
           stream.getTracks().forEach(track => track.stop());
         }
 
-        const constraints = {
-          video: selectedDeviceId
-            ? { deviceId: { exact: selectedDeviceId }, width: { ideal: 720 }, height: { ideal: 1280 } }
-            : { width: { ideal: 720 }, height: { ideal: 1280 } }
-        };
+        // Multi-level robust camera acquisition strategy
+        if (selectedDeviceId && selectedDeviceId !== 'default') {
+          try {
+            activeStream = await navigator.mediaDevices.getUserMedia({
+              video: { deviceId: { exact: selectedDeviceId } }
+            });
+          } catch (e1) {
+            try {
+              activeStream = await navigator.mediaDevices.getUserMedia({
+                video: { deviceId: selectedDeviceId }
+              });
+            } catch (e2) {
+              console.warn(`Exact match failed for ${title}, falling back to default video:`, e2);
+            }
+          }
+        }
 
-        activeStream = await navigator.mediaDevices.getUserMedia(constraints);
+        // Fallback to standard video stream (works for built-in PC cameras & USB devices)
+        if (!activeStream) {
+          activeStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        }
+
         setStream(activeStream);
 
         if (videoRef.current) {
@@ -112,7 +127,7 @@ export default function CameraCard({
         }
       } catch (err) {
         console.error(`Error opening camera for ${title}:`, err);
-        setErrorMsg('Unable to access camera device. Check USB connection or permissions.');
+        setErrorMsg('Camera access denied or device in use by another application.');
         setIsStreaming(false);
       }
     }
@@ -199,9 +214,9 @@ export default function CameraCard({
 
       // 1. Draw glowing skeleton connector lines
       ctx.lineWidth = 4;
-      ctx.strokeStyle = camId === 'cam1' ? '#00f2fe' : (camId === 'cam2' ? '#c084fc' : '#10b981');
+      ctx.strokeStyle = camId === 'cam1' ? '#4f46e5' : (camId === 'cam2' ? '#8b5cf6' : '#059669');
       ctx.shadowColor = ctx.strokeStyle;
-      ctx.shadowBlur = 10;
+      ctx.shadowBlur = 8;
 
       for (const [i, j] of POSE_CONNECTIONS) {
         const lm1 = landmarks[i];
@@ -214,10 +229,10 @@ export default function CameraCard({
         }
       }
 
-      // 2. Draw glowing pink keypoint joint circles
-      ctx.fillStyle = '#ff007f';
-      ctx.shadowColor = '#ff007f';
-      ctx.shadowBlur = 12;
+      // 2. Draw glowing keypoint joint circles
+      ctx.fillStyle = '#f43f5e';
+      ctx.shadowColor = '#f43f5e';
+      ctx.shadowBlur = 10;
 
       for (let i = 0; i < landmarks.length; i++) {
         const lm = landmarks[i];
@@ -236,7 +251,7 @@ export default function CameraCard({
   };
 
   return (
-    <div className={`tactical-panel camera-card card-${camId} ${showSkeleton ? 'active-overlay' : ''}`}>
+    <div className={`clean-card camera-card card-${camId}`}>
       {/* Card Header */}
       <div className="camera-card-header">
         <div className="camera-title-group">
@@ -255,11 +270,11 @@ export default function CameraCard({
             onChange={(e) => onSelectDevice(e.target.value)}
           >
             {availableDevices.length === 0 ? (
-              <option value="">No camera sensors detected</option>
+              <option value="">No cameras detected</option>
             ) : (
               availableDevices.map((dev, idx) => (
                 <option key={dev.deviceId || idx} value={dev.deviceId}>
-                  {dev.label || `DEV_CAM_${idx + 1} [USB/INTEGRATED]`}
+                  {dev.label || `Camera Device ${idx + 1}`}
                 </option>
               ))
             )}
@@ -275,8 +290,8 @@ export default function CameraCard({
             <div className="placeholder-icon">
               <VideoOff size={26} />
             </div>
-            <p style={{ color: '#ff0055', fontWeight: 700, fontSize: '0.85rem' }}>[HW_ERR: CAMERA UNRESPONSIVE]</p>
-            <p style={{ fontSize: '0.75rem' }}>Select active video device from selector</p>
+            <p style={{ color: '#ef4444', fontWeight: 600, fontSize: '0.85rem' }}>{errorMsg}</p>
+            <p style={{ fontSize: '0.75rem' }}>Select another device from dropdown above</p>
           </div>
         ) : (
           <>
@@ -291,16 +306,16 @@ export default function CameraCard({
 
             {/* Viewport HUD Elements */}
             <div className="hud-badge hud-top-left">
-              <span className="status-dot-pulse" style={{ backgroundColor: isStreaming ? '#10b981' : '#ff0055' }} />
-              <span>{isStreaming ? 'STREAM // ACTIVE' : 'ACQUIRING...'}</span>
+              <span className="status-dot-green" style={{ backgroundColor: isStreaming ? '#10b981' : '#ef4444' }} />
+              <span>{isStreaming ? 'LIVE FEED' : 'CONNECTING...'}</span>
             </div>
 
             <div className="hud-badge hud-top-right">
-              {showSkeleton ? 'SKELETON // ON' : 'RAW // FEED'}
+              {showSkeleton ? 'SKELETON ON' : 'RAW FEED'}
             </div>
 
             <div className="hud-badge hud-bottom-left">
-              <span>{fps} FPS</span> | <span>{fitCover ? 'CROP/FILL' : 'FULL_FIT'}</span>
+              <span>{fps} FPS</span> | <span>{fitCover ? 'Crop/Fill' : 'Uncropped Fit'}</span>
             </div>
           </>
         )}
@@ -314,7 +329,7 @@ export default function CameraCard({
             onClick={() => setShowSkeleton(!showSkeleton)}
           >
             {showSkeleton ? <Eye size={14} /> : <EyeOff size={14} />}
-            <span>SKELETON</span>
+            <span>Skeleton</span>
           </button>
 
           <button
@@ -323,7 +338,7 @@ export default function CameraCard({
             title="Mirror feed horizontal flip"
           >
             <FlipHorizontal size={14} />
-            <span>MIRROR</span>
+            <span>Mirror</span>
           </button>
 
           <button
@@ -332,12 +347,12 @@ export default function CameraCard({
             title="Toggle video fit mode (Fit = full uncropped view, Fill = crop to card)"
           >
             {fitCover ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-            <span>{fitCover ? 'FILL' : 'FIT'}</span>
+            <span>{fitCover ? 'Crop/Fill' : 'Full Fit'}</span>
           </button>
         </div>
 
         <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-          [VIEW: {camId === 'cam1' ? 'FRONT_CENTER' : (camId === 'cam2' ? 'LEFT_ANGLE' : 'RIGHT_ANGLE')}]
+          {camId === 'cam1' ? 'Target: Front View' : (camId === 'cam2' ? 'Target: Left-Side View' : 'Target: Right-Side View')}
         </span>
       </div>
     </div>
