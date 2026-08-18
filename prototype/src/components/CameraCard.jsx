@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Eye, EyeOff, FlipHorizontal, VideoOff, Maximize2, Minimize2, Power, PauseCircle } from 'lucide-react';
-import { Pose as PoseModule } from '@mediapipe/pose';
+import { Pose } from '@mediapipe/pose';
 
 // MediaPipe 33 Pose Landmark standard connections
 const POSE_CONNECTIONS = [
@@ -29,11 +29,10 @@ export default function CameraCard({
   const [isStreaming, setIsStreaming] = useState(false);
   const [isPoweredOn, setIsPoweredOn] = useState(true);
   const [showSkeleton, setShowSkeleton] = useState(true);
-  const [isMirrored, setIsMirrored] = useState(false); // Unmirrored by default as requested
+  const [isMirrored, setIsMirrored] = useState(false); // Unmirrored by default
   const [fitCover, setFitCover] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
   const [fps, setFps] = useState(0);
-  const [poseReady, setPoseReady] = useState(false);
 
   // Sync state refs to prevent stale closure traps in MediaPipe callback
   const showSkeletonRef = useRef(showSkeleton);
@@ -53,52 +52,35 @@ export default function CameraCard({
   const frameCountRef = useRef(0);
   const isProcessingRef = useRef(false);
 
-  // Initialize MediaPipe Pose instance with async readiness tracking
+  // Initialize MediaPipe Pose instance (Original Proven Working Setup)
   useEffect(() => {
-    let isMounted = true;
+    let poseInstance = null;
 
-    async function initPoseEngine() {
-      try {
-        const PoseConstructor = window.Pose || PoseModule;
-        const poseInstance = new PoseConstructor({
-          locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
-        });
+    try {
+      poseInstance = new Pose({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`
+      });
 
-        poseInstance.setOptions({
-          modelComplexity: 1, // Full accuracy pose detection model
-          smoothLandmarks: true,
-          enableSegmentation: false,
-          minDetectionConfidence: 0.3,
-          minTrackingConfidence: 0.3,
-        });
+      poseInstance.setOptions({
+        modelComplexity: 1,
+        smoothLandmarks: true,
+        enableSegmentation: false,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5,
+      });
 
-        poseInstance.onResults((results) => {
-          if (isMounted) {
-            handlePoseResults(results);
-          }
-        });
+      poseInstance.onResults((results) => {
+        handlePoseResults(results);
+      });
 
-        await poseInstance.initialize();
-        if (isMounted) {
-          poseRef.current = poseInstance;
-          setPoseReady(true);
-        }
-      } catch (err) {
-        console.error(`Failed to initialize MediaPipe Pose for ${title}:`, err);
-      }
+      poseRef.current = poseInstance;
+    } catch (err) {
+      console.error('Failed to initialize MediaPipe Pose:', err);
     }
 
-    initPoseEngine();
-
     return () => {
-      isMounted = false;
       if (animFrameId.current) cancelAnimationFrame(animFrameId.current);
-      if (poseRef.current) {
-        try {
-          poseRef.current.close();
-        } catch (e) {}
-        poseRef.current = null;
-      }
+      if (poseInstance) poseInstance.close();
     };
   }, []);
 
@@ -180,7 +162,7 @@ export default function CameraCard({
     };
   }, [selectedDeviceId, isPoweredOn, systemActive]);
 
-  // Frame processing loop for MediaPipe Pose
+  // Frame processing loop for MediaPipe Pose (Original Proven Frame Loop)
   useEffect(() => {
     let isMounted = true;
 
@@ -188,22 +170,13 @@ export default function CameraCard({
       if (!isMounted) return;
 
       const video = videoRef.current;
-      if (
-        systemActive &&
-        isPoweredOn &&
-        isStreaming &&
-        poseReady &&
-        poseRef.current &&
-        video &&
-        video.readyState >= 2 &&
-        video.videoWidth > 0
-      ) {
+      if (systemActive && isPoweredOn && video && video.readyState >= 2 && video.videoWidth > 0 && poseRef.current && isStreaming) {
         if (!isProcessingRef.current) {
           isProcessingRef.current = true;
           try {
             await poseRef.current.send({ image: video });
           } catch (e) {
-            // Skip frame on busy loop
+            // Ignore frame skip errors during device switching
           } finally {
             isProcessingRef.current = false;
           }
@@ -221,12 +194,12 @@ export default function CameraCard({
         }
       }
 
-      if (systemActive && isPoweredOn && isStreaming && poseReady) {
+      if (systemActive && isPoweredOn && isStreaming) {
         animFrameId.current = requestAnimationFrame(processFrame);
       }
     }
 
-    if (systemActive && isPoweredOn && isStreaming && poseReady) {
+    if (systemActive && isPoweredOn && isStreaming) {
       animFrameId.current = requestAnimationFrame(processFrame);
     }
 
@@ -234,9 +207,9 @@ export default function CameraCard({
       isMounted = false;
       if (animFrameId.current) cancelAnimationFrame(animFrameId.current);
     };
-  }, [isStreaming, isPoweredOn, systemActive, poseReady]);
+  }, [isStreaming, isPoweredOn, systemActive]);
 
-  // Render Skeleton Overlay on Canvas
+  // Render Skeleton Overlay on Canvas (Original Proven Canvas Renderer)
   const handlePoseResults = (results) => {
     const canvas = canvasRef.current;
     const video = videoRef.current;
@@ -260,7 +233,7 @@ export default function CameraCard({
       ctx.scale(-1, 1);
     }
 
-    if (showSkeletonRef.current && results && results.poseLandmarks && results.poseLandmarks.length > 0) {
+    if (showSkeletonRef.current && results && results.poseLandmarks) {
       const landmarks = results.poseLandmarks;
 
       // 1. Draw glowing green skeleton connector lines across all 3 feeds
@@ -272,7 +245,7 @@ export default function CameraCard({
       for (const [i, j] of POSE_CONNECTIONS) {
         const lm1 = landmarks[i];
         const lm2 = landmarks[j];
-        if (lm1 && lm2) {
+        if (lm1 && lm2 && lm1.x !== undefined && lm1.y !== undefined && lm2.x !== undefined && lm2.y !== undefined) {
           ctx.beginPath();
           ctx.moveTo(lm1.x * width, lm1.y * height);
           ctx.lineTo(lm2.x * width, lm2.y * height);
@@ -287,9 +260,9 @@ export default function CameraCard({
 
       for (let i = 0; i < landmarks.length; i++) {
         const lm = landmarks[i];
-        if (lm) {
+        if (lm && lm.x !== undefined && lm.y !== undefined) {
           ctx.beginPath();
-          ctx.arc(lm.x * width, lm.y * height, 6, 0, 2 * Math.PI);
+          ctx.arc(lm.x * width, lm.y * height, 5, 0, 2 * Math.PI);
           ctx.fill();
           ctx.lineWidth = 2;
           ctx.strokeStyle = '#10b981';
