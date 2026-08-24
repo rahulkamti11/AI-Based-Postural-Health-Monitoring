@@ -180,30 +180,64 @@ To prevent person-level data leakage, validation is performed using **5-Fold Gro
 
 ---
 
-## 9. Project Directory Structure
+## 9. Backend API & Real-Time WebSocket Architecture
+
+The backend layer is implemented in **FastAPI** (`backend/app/main.py`) with support for real-time WebSocket client streaming:
+
+### 9.1 API Endpoints
+- `GET /`: Health check endpoint returning system status and version metadata.
+- `GET /camera-status`: Scans video devices 0..3 via `backend/app/camera/availability.py` and returns active camera device capabilities.
+- `WebSocket /ws/posture`: Real-time streaming connection pushing JSON posture analysis payloads every ~200ms (~5 FPS).
+
+### 9.2 Real-Time WebSocket Payload Schema
+```json
+{
+  "posture_label": "lateral_trunk_tilt_left",
+  "posture_quality": "bad",
+  "confidence": 0.95,
+  "decided_by": "rule_engine",
+  "rule_triggered": "Empirical torso_lateral_lean_angle > 15.0°",
+  "analysis_mode": "Single-Camera Analysis (Front-View)",
+  "contributing_cameras": ["front"],
+  "features": {
+    "shoulder_tilt_angle": -150.56,
+    "shoulder_symmetry_ratio": 1.15,
+    "head_lateral_offset": 0.045,
+    "torso_lateral_lean_angle": 36.94
+  },
+  "health_message": "Asymmetric loading strains shoulder and neck muscles unevenly.",
+  "timestamp": 1756080000.123
+}
+```
+
+---
+
+## 10. Project Directory Structure
 
 ```
 posture-detection-system/
 ├── backend/
 │   └── app/
-│       ├── main.py                     # FastAPI application entrypoint
-│       ├── camera/                     # Video capture & availability modules
-│       ├── pose/                       # MediaPipe extractor module
+│       ├── main.py                     # FastAPI server entrypoint & WebSocket /ws/posture
+│       ├── camera/                     # Hardware camera discovery & capture manager
+│       │   ├── availability.py
+│       │   └── capture.py
+│       ├── pose/                       # MediaPipe landmark & feature extraction module
+│       │   └── mediapipe_extractor.py
 │       ├── models/                     # Trained .pkl models & scalers
 │       │   ├── front_model.pkl
 │       │   └── front_scaler.pkl
-│       ├── inference/                  # Rule engine & fusion logic
-│       │   ├── rule_engine.py
-│       │   ├── predictor.py
-│       │   └── fusion_logic.py
-│       └── websocket/                  # Live WebSocket streaming endpoint
+│       └── inference/                  # Rule engine & fusion logic
+│           ├── rule_engine.py
+│           ├── predictor.py
+│           └── fusion_logic.py
 ├── frontend/
 │   ├── package.json                    # React dashboard dependencies
 │   ├── vite.config.js                  # Vite bundler configuration
 │   └── src/
 │       ├── components/                 # UI cards, banners, and charts
 │       ├── pages/                      # Main dashboard page
-│       └── services/                   # WebSocket client client service
+│       └── services/                   # WebSocket client service
 ├── ml-training/
 │   ├── build_master_dataset.py         # Raw parsing & session subsampling
 │   ├── build_features_front.py         # Front feature calculation
@@ -223,6 +257,7 @@ posture-detection-system/
 │   └── REPORT.md                       # Technical documentation
 ├── Untracked/
 │   └── UPDATES.md                      # Project development log
+│   └── INSTRUCTIONS.md                 # Agent instructions & preferences
 ├── .gitignore                          # Git repository exclusion rules
 └── README.md                           # Main repository overview
 ```
