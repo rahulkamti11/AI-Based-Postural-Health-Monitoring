@@ -5,44 +5,56 @@ AI-Based Sitting Posture Detection and Postural Health Monitoring System
 
 import cv2
 import numpy as np
-import mediapipe as mp
 
 class MediaPipePoseExtractor:
     def __init__(self, min_detection_confidence=0.5, min_tracking_confidence=0.5):
-        self.mp_pose = mp.solutions.pose
-        self.pose = self.mp_pose.Pose(
-            static_image_mode=False,
-            model_complexity=1,
-            smooth_landmarks=True,
-            min_detection_confidence=min_detection_confidence,
-            min_tracking_confidence=min_tracking_confidence
-        )
+        self.mp_pose = None
+        self.pose = None
+
+        try:
+            import mediapipe as mp
+            # Check for legacy solutions API
+            if hasattr(mp, 'solutions') and hasattr(mp.solutions, 'pose'):
+                self.mp_pose = mp.solutions.pose
+                self.pose = self.mp_pose.Pose(
+                    static_image_mode=False,
+                    model_complexity=1,
+                    smooth_landmarks=True,
+                    min_detection_confidence=min_detection_confidence,
+                    min_tracking_confidence=min_tracking_confidence
+                )
+        except Exception as e:
+            print(f"[Backend Warning] MediaPipe solutions pose engine initialization note: {e}")
 
     def extract_landmarks(self, frame):
         """
-        Runs MediaPipe Pose on an BGR OpenCV frame.
-        Returns: (landmarks_dict, results_raw) or (None, None) if pose not detected.
+        Runs MediaPipe Pose on a BGR OpenCV frame.
+        Returns: (landmarks_dict, results_raw) or (None, None) if pose not detected or unavailable.
         """
-        if frame is None:
+        if frame is None or self.pose is None or self.mp_pose is None:
             return None, None
 
-        image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = self.pose.process(image_rgb)
+        try:
+            image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            results = self.pose.process(image_rgb)
 
-        if not results.pose_landmarks:
+            if not results or not results.pose_landmarks:
+                return None, None
+
+            landmarks = {}
+            for idx, landmark in enumerate(results.pose_landmarks.landmark):
+                lm_name = self.mp_pose.PoseLandmark(idx).name.lower()
+                landmarks[lm_name] = {
+                    'x': float(landmark.x),
+                    'y': float(landmark.y),
+                    'z': float(landmark.z),
+                    'visibility': float(landmark.visibility)
+                }
+
+            return landmarks, results
+        except Exception as e:
+            print(f"[Backend Error] Pose processing frame error: {e}")
             return None, None
-
-        landmarks = {}
-        for idx, landmark in enumerate(results.pose_landmarks.landmark):
-            lm_name = self.mp_pose.PoseLandmark(idx).name.lower()
-            landmarks[lm_name] = {
-                'x': float(landmark.x),
-                'y': float(landmark.y),
-                'z': float(landmark.z),
-                'visibility': float(landmark.visibility)
-            }
-
-        return landmarks, results
 
     def compute_front_features(self, landmarks):
         """
@@ -91,4 +103,7 @@ class MediaPipePoseExtractor:
 
     def close(self):
         if self.pose:
-            self.pose.close()
+            try:
+                self.pose.close()
+            except Exception:
+                pass
