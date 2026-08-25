@@ -4,7 +4,7 @@
 
 This document provides technical documentation for the **AI-Based Sitting Posture Detection and Postural Health Monitoring System**, an IEEE-targeted computer vision and machine learning platform designed for real-time ergonomic monitoring. The system analyzes upper-body pose keypoints captured via standard RGB camera streams, computes geometric spatial relationships, and applies a hybrid inference engine—combining deterministic clinical rule thresholds with trained classical machine learning classifiers—to identify spinal misalignment and ergonomic hazards.
 
-Phase 1 focuses on building a robust front-camera detection pipeline using pre-extracted MediaPipe Pose landmark datasets (MultiPosture Zenodo dataset), establishing a single source of truth dataset schema, de-duplicating continuous held-posture frames, benchmarking classical classifiers, implementing a multi-camera graceful degradation fusion engine, and serving real-time predictions to an interactive React dashboard.
+Phase 1 focuses on building a robust front-camera detection pipeline using pre-extracted MediaPipe Pose landmark datasets (MultiPosture Zenodo dataset), establishing a single source of truth dataset schema, de-duplicating continuous held-posture frames, benchmarking classical classifiers, implementing a multi-camera graceful degradation fusion engine, and serving real-time predictions to an interactive React dashboard with session analytics and togglable audio/visual alerts.
 
 ---
 
@@ -18,7 +18,8 @@ The software architecture follows a decoupled, modular design divided into three
 |              React (Vite) Dashboard + Tailwind CSS + Recharts Visualization        |
 |  +-----------------------------------------------------------------------------+  |
 |  | WebRTC Video Capture -> MediaPipe JS Keypoint Extractor -> WebSocket Client  |  |
-|  |  CameraStatus.jsx | PostureLiveView.jsx | AlertBanner.jsx | HistoryChart.jsx  |  |
+|  |  CameraCard.jsx | SessionSummary.jsx | BadPostureModal.jsx | AlertBanner.jsx  |  |
+|  |  PostureLiveView.jsx | CameraStatus.jsx | PostureHistoryChart.jsx           |  |
 |  +-----------------------------------------------------------------------------+  |
 +-----------------------------------------------------------------------------------+
                                          ^
@@ -52,23 +53,23 @@ The system enforces a two-tier labeling scheme:
 
 ### Class Definitions & Clinical Health Risk Mapping
 
-| Technical `posture_label` | `posture_quality` | Detection View | Ergonomic Health Risk & Literature Backing |
-|---|---|---|---|
-| `neutral_spinal_alignment` | `good` | Front + Side | Balanced spine alignment; minimal muscular strain. |
-| `thoracic_kyphotic_slouch` | `bad` | Side | Increased intervertebral disc pressure; elevated risk of lumbar disc herniation over prolonged sitting. |
-| `cervical_forward_head_posture` | `bad` | Side | Strains cervical extensor musculature; directly associated with elevated neck pain severity (CVA $< 48\text{--}50^\circ$). |
-| `lateral_trunk_tilt_left` | `bad` | Front | Asymmetric coronal loading; uneven muscular fatigue across left shoulder/torso. |
-| `lateral_trunk_tilt_right` | `bad` | Front | Asymmetric coronal loading; uneven muscular fatigue across right shoulder/torso. |
-| `posterior_trunk_recline` | `bad` | Side | Excessive backward lean without lumbar support; linked to reduced natural lumbar lordosis. |
+| Technical `posture_label` | `posture_quality` | Detection View | Skeleton Overlay Color | Ergonomic Health Risk & Literature Backing |
+|---|---|---|---|---|
+| `neutral_spinal_alignment` | `good` | Front + Side | **Green (`#10b981`)** | Balanced spine alignment; minimal muscular strain. |
+| `thoracic_kyphotic_slouch` | `bad` | Side | **Red (`#ef4444`)** | Increased intervertebral disc pressure; elevated risk of lumbar disc herniation over prolonged sitting. |
+| `cervical_forward_head_posture` | `bad` | Side | **Red (`#ef4444`)** | Strains cervical extensor musculature; directly associated with elevated neck pain severity (CVA $< 48\text{--}50^\circ$). |
+| `lateral_trunk_tilt_left` | `bad` | Front | **Red (`#ef4444`)** | Asymmetric coronal loading; uneven muscular fatigue across left shoulder/torso. |
+| `lateral_trunk_tilt_right` | `bad` | Front | **Red (`#ef4444`)** | Asymmetric coronal loading; uneven muscular fatigue across right shoulder/torso. |
+| `posterior_trunk_recline` | `bad` | Side | **Red (`#ef4444`)** | Excessive backward lean without lumbar support; linked to reduced natural lumbar lordosis. |
 
 ---
 
 ## 4. Multi-Camera Hardware Setup & Graceful Degradation Strategy
 
-### Camera Setup
-- **Front Camera:** Built-in laptop webcam or smartphone (coronal plane view).
-- **Left Camera:** Smartphone via WiFi webcam stream (sagittal plane view).
-- **Right Camera:** Smartphone via WiFi webcam stream (sagittal plane view).
+### Camera Setup & Smart Auto-Mapping
+- **Front Camera (Cam 1):** Laptop built-in webcam (coronal plane view).
+- **Left Camera (Cam 2):** Mobile camera via Iriun/DroidCam WiFi stream (sagittal plane view).
+- **Right Camera (Cam 3):** Mobile camera via Iriun/DroidCam WiFi stream (sagittal plane view).
 
 ### Dynamic Degradation Logic
 To prevent system failure when one or more cameras are disconnected, the inference pipeline dynamically adapts its behavior based on active camera availability:
@@ -101,16 +102,7 @@ Because the dataset records continuous held postures frame-by-frame, consecutive
 To address this:
 1. Consecutive rows sharing the same `subject_id` and `posture_label` are grouped into continuous `session_id` blocks.
 2. Within each session block, every $5^{\text{th}}$ frame ($N=5$) is retained, while **first and last endpoint frames are strictly preserved**.
-3. **Result:** Reduced dataset size from **4,794** to **1,029** clean frames (**78.54% redundancy reduction**), while maintaining exact relative class distributions:
-
-| `posture_label` | Raw Frame Count | Subsampled Count ($N=5$) | Retained Percentage |
-|---|---|---|---|
-| `thoracic_kyphotic_slouch` | 1,897 | 396 | 20.87% |
-| `neutral_spinal_alignment` | 1,615 | 337 | 20.87% |
-| `posterior_trunk_recline` | 442 | 102 | 23.08% |
-| `lateral_trunk_tilt_left` | 420 | 97 | 23.10% |
-| `lateral_trunk_tilt_right` | 420 | 97 | 23.10% |
-| **Total** | **4,794** | **1,029** | **21.46%** |
+3. **Result:** Reduced dataset size from **4,794** to **1,029** clean frames (**78.54% redundancy reduction**), while maintaining exact relative class distributions.
 
 ---
 
@@ -119,19 +111,15 @@ To address this:
 From the master landmark dataset, 4 core front geometric features are calculated per frame:
 
 1. **Shoulder Tilt Angle (`shoulder_tilt_angle`):**
-   Angle between the line connecting left and right shoulder landmarks and the horizontal axis:
    $$\theta_{\text{shoulder}} = \text{atan2}(y_{\text{right\_shoulder}} - y_{\text{left\_shoulder}}, x_{\text{right\_shoulder}} - x_{\text{left\_shoulder}}) \times \frac{180}{\pi}$$
 
 2. **Shoulder Symmetry Ratio (`shoulder_symmetry_ratio`):**
-   Ratio of 3D Euclidean distance from nose to left shoulder versus nose to right shoulder:
    $$R_{\text{symmetry}} = \frac{d(\text{nose}, \text{left\_shoulder})}{d(\text{nose}, \text{right\_shoulder}) + \epsilon}$$
 
 3. **Head Lateral Offset (`head_lateral_offset`):**
-   Horizontal offset between nose $x$-coordinate and the mid-point of left and right shoulders:
    $$\Delta x_{\text{head}} = x_{\text{nose}} - \frac{x_{\text{left\_shoulder}} + x_{\text{right\_shoulder}}}{2}$$
 
 4. **Torso Lateral Lean Angle (`torso_lateral_lean_angle`):**
-   Angle formed between the vector connecting hip midpoint to shoulder midpoint and the vertical axis in the coronal ($x$-$y$) plane:
    $$\theta_{\text{torso}} = \text{atan2}(x_{\text{shoulder\_mid}} - x_{\text{hip\_mid}}, -(y_{\text{shoulder\_mid}} - y_{\text{hip\_mid}})) \times \frac{180}{\pi}$$
 
 ---
@@ -159,7 +147,7 @@ The rule engine (`backend/app/inference/rule_engine.py`) executes prior to ML cl
 ## 8. Machine Learning Model Benchmarking & Validation
 
 ### 8.1 Validation Methodology (GroupKFold Cross-Validation)
-To prevent person-level data leakage, validation is performed using **5-Fold GroupKFold Cross-Validation** grouped strictly by `subject_id` (13 subjects total; 10 subjects in train split, 3 subjects in test split).
+5-Fold GroupKFold Cross-Validation grouped strictly by `subject_id` (13 subjects total; 10 subjects in train split, 3 subjects in test split).
 
 ### 8.2 Classifier Performance Benchmarks
 
@@ -169,55 +157,28 @@ To prevent person-level data leakage, validation is performed using **5-Fold Gro
 | **Random Forest (100 Trees)** | 59.32% | $\pm 2.30\%$ | 0.110 ms / sample | Secondary Baseline |
 | **Logistic Regression** | 52.13% | $\pm 4.01\%$ | 0.004 ms / sample | Linear Baseline |
 
-### 8.3 Hyperparameter Tuning & Test Performance
-- **GridSearchCV Optimization:** Tuned RBF SVM parameters to $C = 10.0$ and $\gamma = 0.1$, increasing cross-validation accuracy to **66.82%**.
-- **Held-Out Test Set Results (Subjects 1, 10, 12):**
-  - `lateral_trunk_tilt_left`: Precision = **0.92**, Recall = **0.81**, F1 = **0.86**
-  - `lateral_trunk_tilt_right`: Precision = **0.96**, Recall = **0.89**, F1 = **0.92**
-  - Overall Test Set Macro F1: **0.6338**
-
 ---
 
 ## 9. Backend API & Genuine Real-Time WebSocket Architecture
 
-The backend layer is implemented in **FastAPI** (`backend/app/main.py`) with support for genuine client landmark WebSocket streaming:
+Implemented in **FastAPI** (`backend/app/main.py`) with support for genuine client landmark WebSocket streaming:
 
 ### 9.1 API Endpoints
 - `GET /`: Health check endpoint returning system status and version metadata.
 - `GET /camera-status`: Scans video devices 0..3 via `backend/app/camera/availability.py` and returns active camera device capabilities.
 - `WebSocket /ws/posture`: Bi-directional real-time streaming connection. Receives live 3D MediaPipe landmark keypoints from the browser video stream and returns genuine calculated feature angles and ML model predictions every ~100--200ms.
 
-### 9.2 Real-Time WebSocket Payload Schema
-```json
-{
-  "posture_label": "lateral_trunk_tilt_left",
-  "posture_quality": "bad",
-  "confidence": 0.95,
-  "decided_by": "rule_engine",
-  "rule_triggered": "Empirical torso_lateral_lean_angle > 15.0°",
-  "analysis_mode": "Single-Camera Analysis (Front-View)",
-  "contributing_cameras": ["front"],
-  "features": {
-    "shoulder_tilt_angle": -150.56,
-    "shoulder_symmetry_ratio": 1.15,
-    "head_lateral_offset": 0.045,
-    "torso_lateral_lean_angle": 36.94
-  },
-  "health_message": "Asymmetric loading strains shoulder and neck muscles unevenly.",
-  "timestamp": 1756080000.123
-}
-```
-
 ---
 
-## 10. Frontend Dashboard Architecture & Styling Setup
+## 10. Frontend Dashboard Architecture & Interactive Alerts
 
-The frontend is built using **React 18 + Vite** with Tailwind CSS v3 and Recharts for real-time visualization:
+Built using **React 18 + Vite** with Tailwind CSS v3 and Recharts for real-time visualization:
 
 ### 10.1 Key Frontend Modules
-- **`services/websocketClient.js`:** WebSocket client connection manager with `sendLandmarks(landmarks, camId)` method to stream live keypoints to the backend.
-- **`components/CameraCard.jsx`:** 3-camera preview card grid with HTML5 canvas glowing MediaPipe 3D pose skeleton overlays (`#10b981`), camera selector dropdowns, individual power toggles, and live keypoint streaming.
-- **`components/Header.jsx`:** Master monitoring control header bar with global Start/Stop toggle and camera rescan button.
+- **`components/CameraCard.jsx`:** 3-camera preview card grid with HTML5 canvas glowing MediaPipe 3D pose skeleton overlays (**Green `#10b981`** for Good posture, **Red `#ef4444`** for Bad posture).
+- **`components/SessionSummary.jsx`:** Renders live session duration timer (HH:MM:SS), Posture Health Score (0--100%), bad posture instance counter, and top posture risk badge.
+- **`components/BadPostureModal.jsx`:** Interactive warning popup modal triggering when `posture_quality` stays `bad` for $> 30$ seconds continuously.
+- **`components/Header.jsx`:** Master control header bar with global Start/Stop toggle, camera rescan button, and togglable **Audio Sitting Alert (60s)** and **Visual Alert (30s)** buttons.
 - **`components/CameraStatus.jsx`:** Renders active camera counts, dynamic degradation mode badges (`Full 3-Camera` vs `Partial` vs `Single-Camera`), and contributing camera tags.
 - **`components/PostureLiveView.jsx`:** Main posture status card displaying technical `posture_label`, binary `posture_quality` badges (`GOOD` vs `BAD`), confidence scores, decision layer tags, and live feature values (`torso_lateral_lean_angle`, `shoulder_tilt_angle`).
 - **`components/AlertBanner.jsx`:** Highlights ergonomic risk warnings during sustained posture misalignments.
@@ -250,10 +211,12 @@ posture-detection-system/
 │   ├── postcss.config.js               # PostCSS Tailwind v3 plugin setup
 │   ├── tailwind.config.js              # Tailwind content scanner configuration
 │   └── src/
-│       ├── components/                 # UI cards, banners, and charts
+│       ├── components/                 # UI cards, banners, charts, and modals
 │       │   ├── CameraCard.jsx
 │       │   ├── Header.jsx
 │       │   ├── InfoBanner.jsx
+│       │   ├── SessionSummary.jsx
+│       │   ├── BadPostureModal.jsx
 │       │   ├── CameraStatus.jsx
 │       │   ├── PostureLiveView.jsx
 │       │   ├── AlertBanner.jsx
