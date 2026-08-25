@@ -4,7 +4,7 @@
 
 This document provides technical documentation for the **AI-Based Sitting Posture Detection and Postural Health Monitoring System**, an IEEE-targeted computer vision and machine learning platform designed for real-time ergonomic monitoring. The system analyzes upper-body pose keypoints captured via standard RGB camera streams, computes geometric spatial relationships, and applies a hybrid inference engine—combining deterministic clinical rule thresholds with trained classical machine learning classifiers—to identify spinal misalignment and ergonomic hazards.
 
-Phase 1 focuses on building a robust front-camera detection pipeline using pre-extracted MediaPipe Pose landmark datasets (MultiPosture Zenodo dataset), establishing a single source of truth dataset schema, de-duplicating continuous held-posture frames, benchmarking classical classifiers, and implementing a multi-camera graceful degradation fusion engine.
+Phase 1 focuses on building a robust front-camera detection pipeline using pre-extracted MediaPipe Pose landmark datasets (MultiPosture Zenodo dataset), establishing a single source of truth dataset schema, de-duplicating continuous held-posture frames, benchmarking classical classifiers, implementing a multi-camera graceful degradation fusion engine, and serving real-time predictions to an interactive React dashboard.
 
 ---
 
@@ -16,9 +16,12 @@ The software architecture follows a decoupled, modular design divided into three
 +-----------------------------------------------------------------------------------+
 |                                 FRONTEND LAYER                                    |
 |              React (Vite) Dashboard + Tailwind CSS + Recharts Visualization        |
+|  +-----------------------------------------------------------------------------+  |
+|  |  CameraStatus.jsx | PostureLiveView.jsx | AlertBanner.jsx | HistoryChart.jsx  |  |
+|  +-----------------------------------------------------------------------------+  |
 +-----------------------------------------------------------------------------------+
                                          ^
-                                         | WebSocket Stream (/ws/posture)
+                                         | WebSocket Stream (/ws/posture @ 5 FPS)
                                          v
 +-----------------------------------------------------------------------------------+
 |                                 BACKEND LAYER                                     |
@@ -212,7 +215,20 @@ The backend layer is implemented in **FastAPI** (`backend/app/main.py`) with sup
 
 ---
 
-## 10. Project Directory Structure
+## 10. Frontend Dashboard Architecture
+
+The frontend is built using **React 18 + Vite** with Tailwind CSS and Recharts for real-time visualization:
+
+### 10.1 Key Frontend Modules
+- **`services/websocketClient.js`:** WebSocket client connection manager with automatic reconnection handling and event listeners.
+- **`components/CameraStatus.jsx`:** Renders active camera device counts, dynamic degradation mode badges (`Full 3-Camera` vs `Partial` vs `Single-Camera`), and contributing camera tags.
+- **`components/PostureLiveView.jsx`:** Main posture status card displaying technical `posture_label`, binary `posture_quality` badges (`GOOD` vs `BAD`), confidence scores, decision layer tags, and live feature values (`torso_lateral_lean_angle`, `shoulder_tilt_angle`).
+- **`components/AlertBanner.jsx`:** Highlights ergonomic risk warnings during sustained posture misalignments.
+- **`components/PostureHistoryChart.jsx`:** Real-time Recharts area chart plotting torso lean angle and shoulder tilt trends over time.
+
+---
+
+## 11. Project Directory Structure
 
 ```
 posture-detection-system/
@@ -236,8 +252,15 @@ posture-detection-system/
 │   ├── vite.config.js                  # Vite bundler configuration
 │   └── src/
 │       ├── components/                 # UI cards, banners, and charts
+│       │   ├── CameraStatus.jsx
+│       │   ├── PostureLiveView.jsx
+│       │   ├── AlertBanner.jsx
+│       │   └── PostureHistoryChart.jsx
 │       ├── pages/                      # Main dashboard page
-│       └── services/                   # WebSocket client service
+│       │   └── Dashboard.jsx
+│       ├── services/                   # WebSocket client service
+│       │   └── websocketClient.js
+│       └── App.jsx
 ├── ml-training/
 │   ├── build_master_dataset.py         # Raw parsing & session subsampling
 │   ├── build_features_front.py         # Front feature calculation
