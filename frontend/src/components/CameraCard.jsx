@@ -3,7 +3,6 @@ import { ChevronDown, Eye, EyeOff, FlipHorizontal, VideoOff, Maximize2, Minimize
 import { Pose } from '@mediapipe/pose';
 import { postureSocket } from '../services/websocketClient';
 
-// MediaPipe 33 Pose Landmark standard connections
 const POSE_CONNECTIONS = [
   [11, 12], [11, 13], [13, 15], [12, 14], [14, 16], // Arms & Shoulders
   [11, 23], [12, 24], [23, 24],                   // Torso & Hips
@@ -30,7 +29,8 @@ export function CameraCard({
   selectedDeviceId,
   onSelectDevice,
   onFpsUpdate,
-  systemActive = true
+  systemActive = true,
+  postureQuality = 'good'
 }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -45,6 +45,7 @@ export function CameraCard({
 
   const showSkeletonRef = useRef(showSkeleton);
   const isMirroredRef = useRef(isMirrored);
+  const postureQualityRef = useRef(postureQuality);
 
   useEffect(() => {
     showSkeletonRef.current = showSkeleton;
@@ -54,13 +55,16 @@ export function CameraCard({
     isMirroredRef.current = isMirrored;
   }, [isMirrored]);
 
+  useEffect(() => {
+    postureQualityRef.current = postureQuality;
+  }, [postureQuality]);
+
   const poseRef = useRef(null);
   const animFrameId = useRef(null);
   const lastTimeRef = useRef(performance.now());
   const frameCountRef = useRef(0);
   const isProcessingRef = useRef(false);
 
-  // Initialize MediaPipe Pose instance
   useEffect(() => {
     let poseInstance = null;
 
@@ -92,7 +96,6 @@ export function CameraCard({
     };
   }, []);
 
-  // WebRTC Camera stream acquisition
   useEffect(() => {
     let activeStream = null;
 
@@ -167,7 +170,6 @@ export function CameraCard({
     };
   }, [selectedDeviceId, isPoweredOn, systemActive]);
 
-  // Frame processing loop for MediaPipe Pose
   useEffect(() => {
     let isMounted = true;
 
@@ -213,7 +215,6 @@ export function CameraCard({
     };
   }, [isStreaming, isPoweredOn, systemActive]);
 
-  // Render glowing MediaPipe 3D Skeleton & Stream Real Keypoints to Backend
   const handlePoseResults = (results) => {
     const canvas = canvasRef.current;
     const video = videoRef.current;
@@ -240,7 +241,6 @@ export function CameraCard({
     if (results && results.poseLandmarks) {
       const landmarks = results.poseLandmarks;
 
-      // 1. Format and stream REAL 3D landmarks to backend WebSocket for genuine ML inference
       const landmarksDict = {};
       landmarks.forEach((lm, idx) => {
         const name = LANDMARK_NAMES[idx] || `lm_${idx}`;
@@ -252,15 +252,17 @@ export function CameraCard({
         };
       });
 
-      // Stream genuine live keypoints from Front Camera (or active side camera)
       postureSocket.sendLandmarks(landmarksDict, camId === 'cam1' ? 'front' : (camId === 'cam2' ? 'left' : 'right'));
 
-      // 2. Draw Skeleton Lines
       if (showSkeletonRef.current) {
+        // Dynamic Overlay Color: GREEN (#10b981) for Good Posture, RED (#ef4444) for Bad Posture
+        const isGood = postureQualityRef.current === 'good';
+        const strokeColor = isGood ? '#10b981' : '#ef4444';
+
         ctx.lineWidth = 4;
-        ctx.strokeStyle = '#10b981';
-        ctx.shadowColor = '#10b981';
-        ctx.shadowBlur = 8;
+        ctx.strokeStyle = strokeColor;
+        ctx.shadowColor = strokeColor;
+        ctx.shadowBlur = 10;
 
         for (const [i, j] of POSE_CONNECTIONS) {
           const lm1 = landmarks[i];
@@ -284,7 +286,7 @@ export function CameraCard({
             ctx.arc(lm.x * width, lm.y * height, 5, 0, 2 * Math.PI);
             ctx.fill();
             ctx.lineWidth = 2;
-            ctx.strokeStyle = '#10b981';
+            ctx.strokeStyle = strokeColor;
             ctx.stroke();
           }
         }
@@ -387,7 +389,7 @@ export function CameraCard({
             </div>
 
             <div className="hud-badge hud-top-right">
-              {showSkeleton ? 'SKELETON ON' : 'RAW FEED'}
+              {showSkeleton ? (postureQuality === 'good' ? 'SKELETON (GOOD)' : 'SKELETON (BAD)') : 'RAW FEED'}
             </div>
 
             <div className="hud-badge hud-bottom-left">
