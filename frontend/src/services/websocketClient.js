@@ -1,5 +1,5 @@
 /**
- * WebSocket Client Service
+ * WebSocket Client Service with Real-Time Keypoint Streaming
  * AI-Based Sitting Posture Detection and Postural Health Monitoring System
  */
 
@@ -11,6 +11,7 @@ export class PostureWebSocketClient {
     this.statusListeners = new Set();
     this.reconnectTimer = null;
     this.isConnected = false;
+    this.lastSentTime = 0;
   }
 
   connect() {
@@ -52,6 +53,26 @@ export class PostureWebSocketClient {
     } catch (e) {
       console.error("Failed to establish WebSocket connection:", e);
       this.scheduleReconnect();
+    }
+  }
+
+  /**
+   * Sends live 3D landmark keypoints from browser video feed to backend for genuine ML inference.
+   * Throttle sending to ~5-10 FPS (every 100ms-200ms) for high performance.
+   */
+  sendLandmarks(landmarks, camId = 'front') {
+    const now = Date.now();
+    if (now - this.lastSentTime < 100) return; // Cap at 10 FPS rate
+    this.lastSentTime = now;
+
+    if (this.ws && this.ws.readyState === WebSocket.OPEN && landmarks) {
+      const payload = {
+        type: 'landmarks',
+        camera_id: camId,
+        landmarks: landmarks,
+        timestamp: now / 1000.0
+      };
+      this.ws.send(JSON.stringify(payload));
     }
   }
 

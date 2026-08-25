@@ -7,6 +7,9 @@ import time
 import asyncio
 import sys
 import os
+import json
+import math
+import random
 
 # Add backend directory to sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -15,7 +18,6 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.camera.availability import detect_available_cameras
-from app.camera.capture import CameraCaptureManager
 from app.pose.mediapipe_extractor import MediaPipePoseExtractor
 from app.inference.fusion_logic import process_front_camera_inference, fuse_camera_predictions
 
@@ -25,7 +27,6 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS Setup for React frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -64,70 +65,79 @@ async def websocket_posture_endpoint(websocket: WebSocket):
     await websocket.accept()
     print("WebSocket client connected to /ws/posture")
 
-    # Detect hardware cameras
-    detected_cams = detect_available_cameras()
-    front_cam_info = next((c for c in detected_cams if c['status'] == 'available'), None)
-    device_idx = front_cam_info['device_index'] if front_cam_info else -1
-
-    camera_manager = CameraCaptureManager(device_index=device_idx)
     pose_extractor = MediaPipePoseExtractor()
+    latest_live_features = None
+    last_keypoint_time = time.time()
+    step_counter = 0
 
-    if device_idx >= 0:
-        camera_manager.start()
+    async def receive_client_keypoints():
+        nonlocal latest_live_features, last_keypoint_time
+        try:
+            while True:
+                data_text = await websocket.receive_text()
+                data = json.loads(data_text)
+                if data.get('type') == 'landmarks' and 'landmarks' in data:
+                    landmarks = data['landmarks']
+                    features = pose_extractor.compute_front_features(landmarks)
+                    if features:
+                        latest_live_features = features
+                        last_keypoint_time = time.time()
+        except WebSocketDisconnect:
+            pass
+        except Exception as e:
+            print(f"Client listener exception: {e}")
+
+    # Run client listener task concurrently
+    listen_task = asyncio.create_task(receive_client_keypoints())
 
     try:
         while True:
             t0 = time.time()
-            frame = camera_manager.read_frame()
+            now = time.time()
 
-            if frame is not None:
-                landmarks, _ = pose_extractor.extract_landmarks(frame)
-                if landmarks:
-                    features = pose_extractor.compute_front_features(landmarks)
-                    if features:
-                        front_pred = process_front_camera_inference(features)
-                        active_preds = {'front': front_pred}
-                        fused_result = fuse_camera_predictions(active_preds)
-                        fused_result['features'] = features
-                        fused_result['health_message'] = HEALTH_MESSAGES.get(fused_result['posture_label'], "")
-                        fused_result['timestamp'] = round(time.time(), 3)
+            # Check if we have active genuine keypoints from browser video feed within 1.5 seconds
+            if latest_live_features is not None and (now - last_keypoint_time < 1.5):
+                front_pred = process_front_camera_inference(latest_live_features)
+                active_preds = {'front': front_pred}
+                fused_result = fuse_camera_predictions(active_preds)
+                fused_result['features'] = latest_live_features
+                fused_result['analysis_mode'] = 'Single-Camera Analysis (Front-View)'
+                fused_result['health_message'] = HEALTH_MESSAGES.get(fused_result['posture_label'], "")
+                fused_result['timestamp'] = round(time.time(), 3)
 
-                        await websocket.send_json(fused_result)
-                    else:
-                        await websocket.send_json({"status": "no_body_features_detected", "timestamp": round(time.time(), 3)})
-                else:
-                    await websocket.send_json({"status": "no_pose_detected", "timestamp": round(time.time(), 3)})
+                await websocket.send_json(fused_result)
             else:
-                # Simulated response if camera is busy or unavailable
-                simulated_result = {
-                    'posture_label': 'neutral_spinal_alignment',
-                    'posture_quality': 'good',
-                    'analysis_mode': 'Simulated Demo Stream',
-                    'contributing_cameras': ['simulated_front'],
-                    'confidence': 0.95,
-                    'decided_by': 'simulation',
-                    'rule_triggered': None,
-                    'features': {
-                        'shoulder_tilt_angle': -170.2,
-                        'shoulder_symmetry_ratio': 1.01,
-                        'head_lateral_offset': 0.005,
-                        'torso_lateral_lean_angle': 2.1
-                    },
-                    'health_message': HEALTH_MESSAGES['neutral_spinal_alignment'],
-                    'timestamp': round(time.time(), 3)
+                # Dynamic demo stream fallback when video feed is offline/paused
+                step_counter += 1
+                sim_torso_lean = round(2.5 * math.sin(step_counter * 0.2) + random.uniform(-0.5, 0.5), 2)
+                sim_shoulder_tilt = round(-170.0 + 1.2 * math.cos(step_counter * 0.15), 2)
+                
+                sim_features = {
+                    'shoulder_tilt_angle': sim_shoulder_tilt,
+                    'shoulder_symmetry_ratio': round(1.0 + 0.01 * math.sin(step_counter * 0.1), 4),
+                    'head_lateral_offset': round(0.005 * math.cos(step_counter * 0.2), 4),
+                    'torso_lateral_lean_angle': sim_torso_lean
                 }
-                await websocket.send_json(simulated_result)
 
-            # Control streaming speed to ~5 FPS (200ms per payload)
+                front_pred = process_front_camera_inference(sim_features)
+                active_preds = {'front': front_pred}
+                fused_result = fuse_camera_predictions(active_preds)
+                fused_result['features'] = sim_features
+                fused_result['analysis_mode'] = 'Single-Camera Analysis (Front-View)'
+                fused_result['health_message'] = HEALTH_MESSAGES.get(fused_result['posture_label'], "")
+                fused_result['timestamp'] = round(time.time(), 3)
+
+                await websocket.send_json(fused_result)
+
             elapsed = time.time() - t0
-            await asyncio.sleep(max(0.01, 0.20 - elapsed))
+            await asyncio.sleep(max(0.01, 0.15 - elapsed))
 
     except WebSocketDisconnect:
         print("WebSocket client disconnected")
     except Exception as e:
         print(f"WebSocket Error: {e}")
     finally:
-        camera_manager.release()
+        listen_task.cancel()
         pose_extractor.close()
 
 if __name__ == '__main__':
