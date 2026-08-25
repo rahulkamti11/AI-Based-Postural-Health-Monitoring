@@ -215,9 +215,9 @@ The backend layer is implemented in **FastAPI** (`backend/app/main.py`) with sup
 
 ---
 
-## 10. Frontend Dashboard Architecture
+## 10. Frontend Dashboard Architecture & Styling Setup
 
-The frontend is built using **React 18 + Vite** with Tailwind CSS and Recharts for real-time visualization:
+The frontend is built using **React 18 + Vite** with Tailwind CSS v3 and Recharts for real-time visualization:
 
 ### 10.1 Key Frontend Modules
 - **`services/websocketClient.js`:** WebSocket client connection manager with automatic reconnection handling and event listeners.
@@ -225,6 +225,10 @@ The frontend is built using **React 18 + Vite** with Tailwind CSS and Recharts f
 - **`components/PostureLiveView.jsx`:** Main posture status card displaying technical `posture_label`, binary `posture_quality` badges (`GOOD` vs `BAD`), confidence scores, decision layer tags, and live feature values (`torso_lateral_lean_angle`, `shoulder_tilt_angle`).
 - **`components/AlertBanner.jsx`:** Highlights ergonomic risk warnings during sustained posture misalignments.
 - **`components/PostureHistoryChart.jsx`:** Real-time Recharts area chart plotting torso lean angle and shoulder tilt trends over time.
+
+### 10.2 Tailwind CSS v3 Styling Configuration
+- Standard PostCSS pipeline configured via `postcss.config.js` (`tailwindcss@3.4.1`, `autoprefixer@10.4.18`).
+- Styling directives defined in `src/index.css` (`@tailwind base; @tailwind components; @tailwind utilities;`).
 
 ---
 
@@ -250,6 +254,8 @@ posture-detection-system/
 ├── frontend/
 │   ├── package.json                    # React dashboard dependencies
 │   ├── vite.config.js                  # Vite bundler configuration
+│   ├── postcss.config.js               # PostCSS Tailwind v3 plugin setup
+│   ├── tailwind.config.js              # Tailwind content scanner configuration
 │   └── src/
 │       ├── components/                 # UI cards, banners, and charts
 │       │   ├── CameraStatus.jsx
