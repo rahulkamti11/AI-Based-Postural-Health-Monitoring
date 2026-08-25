@@ -17,11 +17,13 @@ The software architecture follows a decoupled, modular design divided into three
 |                                 FRONTEND LAYER                                    |
 |              React (Vite) Dashboard + Tailwind CSS + Recharts Visualization        |
 |  +-----------------------------------------------------------------------------+  |
+|  | WebRTC Video Capture -> MediaPipe JS Keypoint Extractor -> WebSocket Client  |  |
 |  |  CameraStatus.jsx | PostureLiveView.jsx | AlertBanner.jsx | HistoryChart.jsx  |  |
 |  +-----------------------------------------------------------------------------+  |
 +-----------------------------------------------------------------------------------+
                                          ^
-                                         | WebSocket Stream (/ws/posture @ 5 FPS)
+                                         | Genuine Landmark JSON (Client -> Server)
+                                         | Prediction & Feature JSON (Server -> Client)
                                          v
 +-----------------------------------------------------------------------------------+
 |                                 BACKEND LAYER                                     |
@@ -36,13 +38,6 @@ The software architecture follows a decoupled, modular design divided into three
 |  |                     Weighted Camera Fusion Engine                           |  |
 |  |       (Front: 1.2, Left: 1.0, Right: 1.0) + Degradation Mode Tracker       |  |
 |  +-----------------------------------------------------------------------------+  |
-+-----------------------------------------------------------------------------------+
-                                         ^
-                                         | RGB Frame Buffer
-                                         v
-+-----------------------------------------------------------------------------------+
-|                              POSE ESTIMATION LAYER                                |
-|         MediaPipe Pose Pipeline (33 3D Keypoints per Frame @ CPU Inference)      |
 +-----------------------------------------------------------------------------------+
 ```
 
@@ -183,14 +178,14 @@ To prevent person-level data leakage, validation is performed using **5-Fold Gro
 
 ---
 
-## 9. Backend API & Real-Time WebSocket Architecture
+## 9. Backend API & Genuine Real-Time WebSocket Architecture
 
-The backend layer is implemented in **FastAPI** (`backend/app/main.py`) with support for real-time WebSocket client streaming:
+The backend layer is implemented in **FastAPI** (`backend/app/main.py`) with support for genuine client landmark WebSocket streaming:
 
 ### 9.1 API Endpoints
 - `GET /`: Health check endpoint returning system status and version metadata.
 - `GET /camera-status`: Scans video devices 0..3 via `backend/app/camera/availability.py` and returns active camera device capabilities.
-- `WebSocket /ws/posture`: Real-time streaming connection pushing JSON posture analysis payloads every ~200ms (~5 FPS).
+- `WebSocket /ws/posture`: Bi-directional real-time streaming connection. Receives live 3D MediaPipe landmark keypoints from the browser video stream and returns genuine calculated feature angles and ML model predictions every ~100--200ms.
 
 ### 9.2 Real-Time WebSocket Payload Schema
 ```json
@@ -220,15 +215,13 @@ The backend layer is implemented in **FastAPI** (`backend/app/main.py`) with sup
 The frontend is built using **React 18 + Vite** with Tailwind CSS v3 and Recharts for real-time visualization:
 
 ### 10.1 Key Frontend Modules
-- **`services/websocketClient.js`:** WebSocket client connection manager with automatic reconnection handling and event listeners.
-- **`components/CameraStatus.jsx`:** Renders active camera device counts, dynamic degradation mode badges (`Full 3-Camera` vs `Partial` vs `Single-Camera`), and contributing camera tags.
+- **`services/websocketClient.js`:** WebSocket client connection manager with `sendLandmarks(landmarks, camId)` method to stream live keypoints to the backend.
+- **`components/CameraCard.jsx`:** 3-camera preview card grid with HTML5 canvas glowing MediaPipe 3D pose skeleton overlays (`#10b981`), camera selector dropdowns, individual power toggles, and live keypoint streaming.
+- **`components/Header.jsx`:** Master monitoring control header bar with global Start/Stop toggle and camera rescan button.
+- **`components/CameraStatus.jsx`:** Renders active camera counts, dynamic degradation mode badges (`Full 3-Camera` vs `Partial` vs `Single-Camera`), and contributing camera tags.
 - **`components/PostureLiveView.jsx`:** Main posture status card displaying technical `posture_label`, binary `posture_quality` badges (`GOOD` vs `BAD`), confidence scores, decision layer tags, and live feature values (`torso_lateral_lean_angle`, `shoulder_tilt_angle`).
 - **`components/AlertBanner.jsx`:** Highlights ergonomic risk warnings during sustained posture misalignments.
 - **`components/PostureHistoryChart.jsx`:** Real-time Recharts area chart plotting torso lean angle and shoulder tilt trends over time.
-
-### 10.2 Tailwind CSS v3 Styling Configuration
-- Standard PostCSS pipeline configured via `postcss.config.js` (`tailwindcss@3.4.1`, `autoprefixer@10.4.18`).
-- Styling directives defined in `src/index.css` (`@tailwind base; @tailwind components; @tailwind utilities;`).
 
 ---
 
@@ -258,6 +251,9 @@ posture-detection-system/
 │   ├── tailwind.config.js              # Tailwind content scanner configuration
 │   └── src/
 │       ├── components/                 # UI cards, banners, and charts
+│       │   ├── CameraCard.jsx
+│       │   ├── Header.jsx
+│       │   ├── InfoBanner.jsx
 │       │   ├── CameraStatus.jsx
 │       │   ├── PostureLiveView.jsx
 │       │   ├── AlertBanner.jsx
