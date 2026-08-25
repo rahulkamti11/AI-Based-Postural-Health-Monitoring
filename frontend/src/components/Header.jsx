@@ -1,9 +1,9 @@
 import React from 'react';
 import { Activity, RefreshCw, PlayCircle, PauseCircle } from 'lucide-react';
 
-export default function Header({ systemActive, onToggleSystem, onRefreshDevices, availableDevicesCount }) {
+export function Header({ systemActive, onToggleSystem, onRefreshDevices, availableDevicesCount }) {
   return (
-    <header className="clean-card header-container">
+    <header className="clean-card header-container mb-6">
       <div className="header-title-area">
         <div className="header-icon-box">
           <Activity size={24} />
@@ -15,13 +15,11 @@ export default function Header({ systemActive, onToggleSystem, onRefreshDevices,
       </div>
 
       <div className="header-actions">
-        {/* Monitoring Active / Stopped Badge */}
         <div className={`status-badge-clean ${systemActive ? '' : 'status-stopped'}`}>
           <span className={systemActive ? 'status-dot-green' : 'status-dot-red'}></span>
           <span>{systemActive ? 'Monitoring Active' : 'Monitoring Stopped'}</span>
         </div>
 
-        {/* Start / Stop Monitoring Toggle Button */}
         <button
           className={`btn-clean ${systemActive ? 'btn-clean-stop' : 'btn-clean-start'}`}
           onClick={onToggleSystem}
@@ -31,7 +29,6 @@ export default function Header({ systemActive, onToggleSystem, onRefreshDevices,
           <span>{systemActive ? 'Stop Monitoring' : 'Start Monitoring'}</span>
         </button>
 
-        {/* Rescan Cameras */}
         <button 
           className="btn-clean" 
           onClick={onRefreshDevices} 
@@ -44,3 +41,5 @@ export default function Header({ systemActive, onToggleSystem, onRefreshDevices,
     </header>
   );
 }
+
+export default Header;

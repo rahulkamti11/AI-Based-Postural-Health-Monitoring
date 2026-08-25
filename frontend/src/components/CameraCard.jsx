@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Eye, EyeOff, FlipHorizontal, VideoOff, Maximize2, Minimize2, Power, PauseCircle } from 'lucide-react';
 import { Pose } from '@mediapipe/pose';
+import { postureSocket } from '../services/websocketClient';
 
 // MediaPipe 33 Pose Landmark standard connections
 const POSE_CONNECTIONS = [
@@ -12,7 +13,15 @@ const POSE_CONNECTIONS = [
   [16, 18], [16, 20], [16, 22]
 ];
 
-export default function CameraCard({
+const LANDMARK_NAMES = [
+  'nose', 'left_eye_inner', 'left_eye', 'left_eye_outer', 'right_eye_inner', 'right_eye', 'right_eye_outer',
+  'left_ear', 'right_ear', 'mouth_left', 'mouth_right', 'left_shoulder', 'right_shoulder', 'left_elbow', 'right_elbow',
+  'left_wrist', 'right_wrist', 'left_pinky', 'right_pinky', 'left_index', 'right_index', 'left_thumb', 'right_thumb',
+  'left_hip', 'right_hip', 'left_knee', 'right_knee', 'left_ankle', 'right_ankle', 'left_heel', 'right_heel',
+  'left_foot_index', 'right_foot_index'
+];
+
+export function CameraCard({
   camId,
   tagLabel,
   tagClass,
@@ -29,12 +38,11 @@ export default function CameraCard({
   const [isStreaming, setIsStreaming] = useState(false);
   const [isPoweredOn, setIsPoweredOn] = useState(true);
   const [showSkeleton, setShowSkeleton] = useState(true);
-  const [isMirrored, setIsMirrored] = useState(false); // Unmirrored by default
+  const [isMirrored, setIsMirrored] = useState(false);
   const [fitCover, setFitCover] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
   const [fps, setFps] = useState(0);
 
-  // Sync state refs to prevent stale closure traps in MediaPipe callback
   const showSkeletonRef = useRef(showSkeleton);
   const isMirroredRef = useRef(isMirrored);
 
@@ -52,7 +60,7 @@ export default function CameraCard({
   const frameCountRef = useRef(0);
   const isProcessingRef = useRef(false);
 
-  // Initialize MediaPipe Pose instance (Original Proven Working Setup)
+  // Initialize MediaPipe Pose instance
   useEffect(() => {
     let poseInstance = null;
 
@@ -75,7 +83,7 @@ export default function CameraCard({
 
       poseRef.current = poseInstance;
     } catch (err) {
-      console.error('Failed to initialize MediaPipe Pose:', err);
+      console.error('Failed to initialize MediaPipe Pose for feed:', err);
     }
 
     return () => {
@@ -84,14 +92,13 @@ export default function CameraCard({
     };
   }, []);
 
-  // Handle WebRTC stream initialization whenever selectedDeviceId, isPoweredOn, or systemActive changes
+  // WebRTC Camera stream acquisition
   useEffect(() => {
     let activeStream = null;
 
     async function startCamera() {
       setErrorMsg(null);
 
-      // Stop existing tracks if powered off or system stopped
       if (!systemActive || !isPoweredOn || !selectedDeviceId) {
         if (stream) {
           stream.getTracks().forEach(track => track.stop());
@@ -111,7 +118,6 @@ export default function CameraCard({
           stream.getTracks().forEach(track => track.stop());
         }
 
-        // Multi-level camera acquisition strategy
         if (selectedDeviceId && selectedDeviceId !== 'default') {
           try {
             activeStream = await navigator.mediaDevices.getUserMedia({
@@ -128,7 +134,6 @@ export default function CameraCard({
           }
         }
 
-        // Fallback to standard video stream ONLY for Cam 1 (Laptop Built-in Camera)
         if (!activeStream && camId === 'cam1') {
           activeStream = await navigator.mediaDevices.getUserMedia({ video: true });
         }
@@ -162,7 +167,7 @@ export default function CameraCard({
     };
   }, [selectedDeviceId, isPoweredOn, systemActive]);
 
-  // Frame processing loop for MediaPipe Pose (Original Proven Frame Loop)
+  // Frame processing loop for MediaPipe Pose
   useEffect(() => {
     let isMounted = true;
 
@@ -176,12 +181,11 @@ export default function CameraCard({
           try {
             await poseRef.current.send({ image: video });
           } catch (e) {
-            // Ignore frame skip errors during device switching
+            // Ignore transient frame skips
           } finally {
             isProcessingRef.current = false;
           }
 
-          // Calculate FPS
           const now = performance.now();
           frameCountRef.current++;
           if (now - lastTimeRef.current >= 1000) {
@@ -209,7 +213,7 @@ export default function CameraCard({
     };
   }, [isStreaming, isPoweredOn, systemActive]);
 
-  // Render Skeleton Overlay on Canvas (Original Proven Canvas Renderer)
+  // Render glowing MediaPipe 3D Skeleton & Stream Real Keypoints to Backend
   const handlePoseResults = (results) => {
     const canvas = canvasRef.current;
     const video = videoRef.current;
@@ -233,40 +237,56 @@ export default function CameraCard({
       ctx.scale(-1, 1);
     }
 
-    if (showSkeletonRef.current && results && results.poseLandmarks) {
+    if (results && results.poseLandmarks) {
       const landmarks = results.poseLandmarks;
 
-      // 1. Draw glowing green skeleton connector lines across all 3 feeds
-      ctx.lineWidth = 4;
-      ctx.strokeStyle = '#10b981';
-      ctx.shadowColor = '#10b981';
-      ctx.shadowBlur = 8;
+      // 1. Format and stream REAL 3D landmarks to backend WebSocket for genuine ML inference
+      const landmarksDict = {};
+      landmarks.forEach((lm, idx) => {
+        const name = LANDMARK_NAMES[idx] || `lm_${idx}`;
+        landmarksDict[name] = {
+          x: lm.x,
+          y: lm.y,
+          z: lm.z || 0,
+          visibility: lm.visibility || 1.0
+        };
+      });
 
-      for (const [i, j] of POSE_CONNECTIONS) {
-        const lm1 = landmarks[i];
-        const lm2 = landmarks[j];
-        if (lm1 && lm2 && lm1.x !== undefined && lm1.y !== undefined && lm2.x !== undefined && lm2.y !== undefined) {
-          ctx.beginPath();
-          ctx.moveTo(lm1.x * width, lm1.y * height);
-          ctx.lineTo(lm2.x * width, lm2.y * height);
-          ctx.stroke();
+      // Stream genuine live keypoints from Front Camera (or active side camera)
+      postureSocket.sendLandmarks(landmarksDict, camId === 'cam1' ? 'front' : (camId === 'cam2' ? 'left' : 'right'));
+
+      // 2. Draw Skeleton Lines
+      if (showSkeletonRef.current) {
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = '#10b981';
+        ctx.shadowColor = '#10b981';
+        ctx.shadowBlur = 8;
+
+        for (const [i, j] of POSE_CONNECTIONS) {
+          const lm1 = landmarks[i];
+          const lm2 = landmarks[j];
+          if (lm1 && lm2 && lm1.x !== undefined && lm1.y !== undefined && lm2.x !== undefined && lm2.y !== undefined) {
+            ctx.beginPath();
+            ctx.moveTo(lm1.x * width, lm1.y * height);
+            ctx.lineTo(lm2.x * width, lm2.y * height);
+            ctx.stroke();
+          }
         }
-      }
 
-      // 2. Draw glowing white keypoint joint circles across all 3 feeds
-      ctx.fillStyle = '#ffffff';
-      ctx.shadowColor = '#ffffff';
-      ctx.shadowBlur = 8;
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = '#ffffff';
+        ctx.shadowBlur = 8;
 
-      for (let i = 0; i < landmarks.length; i++) {
-        const lm = landmarks[i];
-        if (lm && lm.x !== undefined && lm.y !== undefined) {
-          ctx.beginPath();
-          ctx.arc(lm.x * width, lm.y * height, 5, 0, 2 * Math.PI);
-          ctx.fill();
-          ctx.lineWidth = 2;
-          ctx.strokeStyle = '#10b981';
-          ctx.stroke();
+        for (let i = 0; i < landmarks.length; i++) {
+          const lm = landmarks[i];
+          if (lm && lm.x !== undefined && lm.y !== undefined) {
+            ctx.beginPath();
+            ctx.arc(lm.x * width, lm.y * height, 5, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#10b981';
+            ctx.stroke();
+          }
         }
       }
     }
@@ -278,14 +298,12 @@ export default function CameraCard({
 
   return (
     <div className={`clean-card camera-card card-${camId}`}>
-      {/* Card Header */}
       <div className="camera-card-header">
         <div className="camera-title-group">
           <span className={`camera-tag ${tagClass}`}>{tagLabel}</span>
           <h3 className="camera-name">{title}</h3>
         </div>
 
-        {/* Row 2: Device Dropdown + Power Button Side by Side */}
         <div className="camera-header-row2">
           <div className="device-select-wrapper">
             <select
@@ -307,7 +325,6 @@ export default function CameraCard({
             <ChevronDown size={14} className="select-arrow" />
           </div>
 
-          {/* Cam ON/OFF Power Toggle beside dropdown */}
           <button
             className={`toggle-btn power-toggle-btn ${isPoweredOn && systemActive ? 'active' : ''}`}
             onClick={() => setIsPoweredOn(!isPoweredOn)}
@@ -320,7 +337,6 @@ export default function CameraCard({
         </div>
       </div>
 
-      {/* Video Viewport Stage */}
       <div className="video-viewport">
         {!systemActive ? (
           <div className="video-placeholder">
@@ -365,7 +381,6 @@ export default function CameraCard({
 
             <canvas ref={canvasRef} className={`skeleton-canvas ${fitCover ? 'fit-cover' : ''}`} />
 
-            {/* Viewport HUD Elements */}
             <div className="hud-badge hud-top-left">
               <span className="status-dot-green" style={{ backgroundColor: isFeedActive ? '#10b981' : '#ef4444' }} />
               <span>{isFeedActive ? 'LIVE FEED' : 'CONNECTING...'}</span>
@@ -382,10 +397,8 @@ export default function CameraCard({
         )}
       </div>
 
-      {/* Card Footer Controls */}
       <div className="camera-card-footer">
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          {/* Skeleton Overlay Toggle */}
           <button
             className={`toggle-btn ${showSkeleton ? 'active' : ''}`}
             onClick={() => setShowSkeleton(!showSkeleton)}
@@ -395,7 +408,6 @@ export default function CameraCard({
             <span>Skeleton</span>
           </button>
 
-          {/* Mirror Toggle */}
           <button
             className={`toggle-btn ${isMirrored ? 'active' : ''}`}
             onClick={() => setIsMirrored(!isMirrored)}
@@ -406,22 +418,23 @@ export default function CameraCard({
             <span>Mirror</span>
           </button>
 
-          {/* Fit / Fill Toggle */}
           <button
             className={`toggle-btn ${fitCover ? 'active' : ''}`}
             onClick={() => setFitCover(!fitCover)}
             disabled={!systemActive || !isPoweredOn}
-            title="Toggle video fit mode (Fit = full uncropped view, Fill = crop to card)"
+            title="Toggle video fit mode"
           >
             {fitCover ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
             <span>{fitCover ? 'Crop/Fill' : 'Full Fit'}</span>
           </button>
         </div>
 
-        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+        <span style={{ fontSize: '0.75rem', color: '#64748b', fontFamily: 'monospace' }}>
           {camId === 'cam1' ? 'Target: Front View' : (camId === 'cam2' ? 'Target: Left-Side View' : 'Target: Right-Side View')}
         </span>
       </div>
     </div>
   );
 }
+
+export default CameraCard;

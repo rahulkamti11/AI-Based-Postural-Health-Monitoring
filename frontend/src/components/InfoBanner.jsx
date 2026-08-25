@@ -1,9 +1,9 @@
 import React from 'react';
 import { Info } from 'lucide-react';
 
-export default function InfoBanner() {
+export function InfoBanner() {
   return (
-    <div className="clean-card info-banner">
+    <div className="clean-card info-banner mb-6">
       <Info size={20} className="info-icon" />
       <div className="info-content">
         <h4 className="info-title">USB Mobile Camera & Multi-Camera Setup Guidance</h4>
@@ -14,3 +14,5 @@ export default function InfoBanner() {
     </div>
   );
 }
+
+export default InfoBanner;
