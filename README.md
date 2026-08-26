@@ -2,7 +2,7 @@
 
 # 🪑 AI-Based Sitting Posture Detection & Postural Health Monitoring System
 
-### *IEEE Technical Standard Multi-Camera Vision & Hybrid ML-Rule Inference Platform*
+### *Modular Multi-Camera Vision & Hybrid ML-Rule Inference Platform*
 
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.109-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
@@ -51,8 +51,8 @@ The **AI-Based Sitting Posture Detection and Postural Health Monitoring System**
     <td width="50%">
       <h3>🟢🔴 Dynamic Pose Overlay Coloring</h3>
       <ul>
-        <li><b>Good Posture:</b> Glowing skeletal connector lines and keypoint joint nodes render in <b>Emerald Green</b> (<code>#10b981</code>).</li>
-        <li><b>Bad Posture:</b> Overlay dynamically shifts to <b>Rose Red</b> (<code>#ef4444</code>) upon detecting misalignment.</li>
+        <li><b>Good Posture:</b> Glowing skeletal connector lines and keypoint joint nodes render in <b>Green</b>.</li>
+        <li><b>Bad Posture:</b> Overlay dynamically shifts to <b>Red</b> upon detecting misalignment.</li>
         <li><b>Toggleable Rendering:</b> One-click skeleton visibility toggle.</li>
       </ul>
     </td>
@@ -112,12 +112,12 @@ $$\text{posture\_quality} = \begin{cases} \text{good}, & \text{if } \text{postur
 
 | Technical `posture_label` | `posture_quality` | Detection View | Skeleton Color | Ergonomic Health Risk & Medical Context |
 |---|---|---|---|---|
-| `neutral_spinal_alignment` | `good` | Front + Side | 🟢 **Green (`#10b981`)** | Balanced spine alignment; minimal muscular strain. |
-| `thoracic_kyphotic_slouch` | `bad` | Side | 🔴 **Red (`#ef4444`)** | Increased intervertebral disc pressure; elevated risk of lumbar herniation. |
-| `cervical_forward_head_posture` | `bad` | Side | 🔴 **Red (`#ef4444`)** | Strains cervical extensor muscles; directly linked to neck pain severity (CVA $< 48^\circ$). |
-| `lateral_trunk_tilt_left` | `bad` | Front | 🔴 **Red (`#ef4444`)** | Asymmetric coronal loading; uneven muscular fatigue across left shoulder/torso. |
-| `lateral_trunk_tilt_right` | `bad` | Front | 🔴 **Red (`#ef4444`)** | Asymmetric coronal loading; uneven muscular fatigue across right shoulder/torso. |
-| `posterior_trunk_recline` | `bad` | Side | 🔴 **Red (`#ef4444`)** | Excessive backward lean without lumbar support; reduces natural lumbar curve. |
+| `neutral_spinal_alignment` | `good` | Front + Side | 🟢 **Green** | Balanced spine alignment; minimal muscular strain. |
+| `thoracic_kyphotic_slouch` | `bad` | Side | 🔴 **Red** | Increased intervertebral disc pressure; elevated risk of lumbar herniation. |
+| `cervical_forward_head_posture` | `bad` | Side | 🔴 **Red** | Strains cervical extensor muscles; directly linked to neck pain severity (CVA $< 48^\circ$). |
+| `lateral_trunk_tilt_left` | `bad` | Front | 🔴 **Red** | Asymmetric coronal loading; uneven muscular fatigue across left shoulder/torso. |
+| `lateral_trunk_tilt_right` | `bad` | Front | 🔴 **Red** | Asymmetric coronal loading; uneven muscular fatigue across right shoulder/torso. |
+| `posterior_trunk_recline` | `bad` | Side | 🔴 **Red** | Excessive backward lean without lumbar support; reduces natural lumbar curve. |
 
 ---
 
@@ -156,19 +156,20 @@ Training was conducted on the **MultiPosture Zenodo Dataset** (Record `14230872`
 ```
 AI-Based-Postural-Health-Monitoring/
 ├── backend/                            # FastAPI Server & Python Backend
-│   └── app/
-│       ├── main.py                     # Server entrypoint & WebSocket /ws/posture stream
-│       ├── camera/                     # Hardware camera discovery & capture manager
-│       │   ├── availability.py
-│       │   └── capture.py
-│       ├── pose/                       # MediaPipe landmark & feature extractor
-│       │   └── mediapipe_extractor.py
-│       ├── models/                     # Trained ML models (.pkl) & scalers
-│       │   ├── front_model.pkl
-│       │   └── front_scaler.pkl
-│       └── inference/                  # CVA Rule engine & weighted camera fusion
-│           ├── rule_engine.py
-│           └── fusion_logic.py
+│   ├── app/
+│   │   ├── main.py                     # Server entrypoint & WebSocket /ws/posture stream
+│   │   ├── camera/                     # Hardware camera discovery & capture manager
+│   │   │   ├── availability.py
+│   │   │   └── capture.py
+│   │   ├── pose/                       # MediaPipe landmark & feature extractor
+│   │   │   └── mediapipe_extractor.py
+│   │   ├── models/                     # Trained ML models (.pkl) & scalers
+│   │   │   ├── front_model.pkl
+│   │   │   └── front_scaler.pkl
+│   │   └── inference/                  # CVA Rule engine & weighted camera fusion
+│   │       ├── rule_engine.py
+│   │       └── fusion_logic.py
+│   └── requirements.txt                # Python backend dependencies
 ├── frontend/                           # React + Vite Dashboard Application
 │   ├── src/
 │   │   ├── components/                 # React UI Cards & Alert Modals
@@ -205,41 +206,78 @@ AI-Based-Postural-Health-Monitoring/
 
 ## ⚡ Quickstart & Installation Guide
 
+Follow these steps to clone, set up, and run the project on any computer:
+
 ### Prerequisites
-- **Python:** `3.12` or higher
+- **Git**
+- **Python:** `3.10` -- `3.12`
 - **Node.js:** `v18.0.0` or higher
 - **npm:** `v9.0.0` or higher
 
-### 1. Backend Setup & Server Launch
+---
 
+### Step 1: Clone the Repository
+
+```bash
+git clone https://github.com/rahulkamti11/AI-Based-Postural-Health-Monitoring.git
+cd AI-Based-Postural-Health-Monitoring
+```
+
+---
+
+### Step 2: Set Up & Launch Python FastAPI Backend
+
+#### On Windows (PowerShell):
 ```powershell
-# Navigate to workspace root
-cd "d:\Rahul\9.Projects\7. 7th sem Minor Project\project"
-
-# Activate Python virtual environment
-.\.venv\Scripts\Activate.ps1
-
-# Navigate to backend directory
 cd backend
 
-# Start FastAPI Uvicorn WebSocket Server
+# Create Python virtual environment
+python -m venv .venv
+
+# Activate virtual environment
+.\.venv\Scripts\Activate.ps1
+
+# Install backend dependencies
+pip install -r requirements.txt
+
+# Launch FastAPI Uvicorn Server
 python -m uvicorn app.main:app --reload --port 8000
 ```
-> Server will start at `http://127.0.0.1:8000` with WebSocket endpoint `ws://localhost:8000/ws/posture`.
 
-### 2. Frontend React Dashboard Launch
+#### On macOS / Linux (Terminal):
+```bash
+cd backend
 
-```powershell
-# Open a second terminal and navigate to frontend directory
-cd "d:\Rahul\9.Projects\7. 7th sem Minor Project\project\frontend"
+# Create Python virtual environment
+python3 -m venv .venv
 
-# Install dependencies (if not already installed)
+# Activate virtual environment
+source .venv/bin/activate
+
+# Install backend dependencies
+pip install -r requirements.txt
+
+# Launch FastAPI Uvicorn Server
+python3 -m uvicorn app.main:app --reload --port 8000
+```
+> The FastAPI backend server will start at `http://127.0.0.1:8000` with live WebSocket streaming at `ws://localhost:8000/ws/posture`.
+
+---
+
+### Step 3: Set Up & Launch React Frontend Dashboard
+
+Open a **new terminal window** and run:
+
+```bash
+cd frontend
+
+# Install Node modules
 npm install
 
-# Start Vite Development Server
+# Start Vite React Development Server
 npm run dev
 ```
-> Access the interactive dashboard at `http://localhost:5173`.
+> Open your browser and navigate to `http://localhost:5173` to access the live dashboard.
 
 ---
 
@@ -291,6 +329,6 @@ This project is developed under the **MIT License**. The underlying training dat
 
 <div align="center">
 
-**Developed for IEEE Minor Project Evaluation • AIML Department**
+**AI-Based Sitting Posture Detection & Postural Health Monitoring Platform**
 
 </div>
