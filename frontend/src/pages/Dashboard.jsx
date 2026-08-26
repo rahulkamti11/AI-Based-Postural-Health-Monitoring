@@ -296,7 +296,7 @@ export function Dashboard() {
         />
 
         <footer className="text-center text-xs text-slate-400 mt-8 border-t border-slate-200 pt-4">
-          <p>AI Posture Health Monitoring System • IEEE Technical Standard Implementation • Phase 1 Scope</p>
+          <p>AI Posture Health Monitoring System • Real-Time Vision & Feature Fusion Platform • Phase 1 Scope</p>
         </footer>
       </div>
     </div>
