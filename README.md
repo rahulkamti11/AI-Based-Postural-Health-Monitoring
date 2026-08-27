@@ -126,16 +126,16 @@ $$\text{posture\_quality} = \begin{cases} \text{good}, & \text{if } \text{postur
 From 33 extracted MediaPipe 3D pose landmarks $(x, y, z)$, 4 core coronal geometric features are computed per frame:
 
 1. **Torso Lateral Lean Angle ($\theta_{\text{torso}}$):**
-   $$\theta_{\text{torso}} = \text{atan2}(x_{\text{shoulder\_mid}} - x_{\text{hip\_mid}}, -(y_{\text{shoulder\_mid}} - y_{\text{hip\_mid}})) \times \frac{180}{\pi}$$
+   $$\theta_{\text{torso}} = \text{atan2}(x_{\text{shoulder-mid}} - x_{\text{hip-mid}}, -(y_{\text{shoulder-mid}} - y_{\text{hip-mid}})) \times \frac{180}{\pi}$$
 
 2. **Shoulder Tilt Angle ($\theta_{\text{shoulder}}$):**
-   $$\theta_{\text{shoulder}} = \text{atan2}(y_{\text{right\_shoulder}} - y_{\text{left\_shoulder}}, x_{\text{right\_shoulder}} - x_{\text{left\_shoulder}}) \times \frac{180}{\pi}$$
+   $$\theta_{\text{shoulder}} = \text{atan2}(y_{\text{right-shoulder}} - y_{\text{left-shoulder}}, x_{\text{right-shoulder}} - x_{\text{left-shoulder}}) \times \frac{180}{\pi}$$
 
 3. **Shoulder Symmetry Ratio ($R_{\text{symmetry}}$):**
-   $$R_{\text{symmetry}} = \frac{d(\text{nose}, \text{left\_shoulder})}{d(\text{nose}, \text{right\_shoulder}) + \epsilon}$$
+   $$R_{\text{symmetry}} = \frac{d(\text{nose}, \text{left-shoulder})}{d(\text{nose}, \text{right-shoulder}) + \epsilon}$$
 
 4. **Head Lateral Offset ($\Delta x_{\text{head}}$):**
-   $$\Delta x_{\text{head}} = x_{\text{nose}} - \frac{x_{\text{left\_shoulder}} + x_{\text{right\_shoulder}}}{2}$$
+   $$\Delta x_{\text{head}} = x_{\text{nose}} - \frac{x_{\text{left-shoulder}} + x_{\text{right-shoulder}}}{2}$$
 
 ---
 
