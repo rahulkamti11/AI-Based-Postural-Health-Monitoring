@@ -1,8 +1,8 @@
 import React from 'react';
-import { AlertCircle, HeartPulse, Info } from 'lucide-react';
+import { AlertCircle, HeartPulse } from 'lucide-react';
 
 export function AlertBanner({ postureData }) {
-  if (!postureData || postureData.posture_quality === 'good' || !postureData.health_message) {
+  if (!postureData || postureData.overall_quality === 'good') {
     return (
       <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-xl p-4 mb-6 flex items-center space-x-3 text-emerald-800">
         <HeartPulse className="w-5 h-5 text-emerald-600 flex-shrink-0" />
@@ -13,7 +13,7 @@ export function AlertBanner({ postureData }) {
     );
   }
 
-  const { posture_label, health_message } = postureData;
+  const message = postureData.feedback?.message || 'Posture deviation detected. Please adjust your posture.';
 
   return (
     <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 mb-6 flex items-start space-x-3 text-rose-900 shadow-sm animate-pulse">
@@ -21,7 +21,7 @@ export function AlertBanner({ postureData }) {
       <div>
         <h4 className="text-xs font-bold uppercase tracking-wider text-rose-700">Posture Risk Warning</h4>
         <p className="text-xs md:text-sm font-medium text-rose-900 mt-0.5">
-          {health_message}
+          {message}
         </p>
       </div>
     </div>

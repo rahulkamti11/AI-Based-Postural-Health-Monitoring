@@ -19,11 +19,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.camera.availability import detect_available_cameras
 from app.pose.mediapipe_extractor import MediaPipePoseExtractor
-from app.inference.fusion_logic import process_front_camera_inference, fuse_camera_predictions
+from app.inference.binary_logic import MockBinaryClassifier
 
 app = FastAPI(
     title="AI Sitting Posture Detection API",
-    description="Real-time multi-camera posture analysis WebSocket service for IEEE minor project.",
+    description="Real-time multi-camera binary posture analysis WebSocket service.",
     version="1.0.0"
 )
 
@@ -35,20 +35,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-HEALTH_MESSAGES = {
-    'neutral_spinal_alignment': "Balanced spine alignment; minimal muscular strain.",
-    'cervical_forward_head_posture': "Prolonged forward head posture strains neck muscles and is associated with increased neck pain severity.",
-    'thoracic_kyphotic_slouch': "Sustained slouching increases intervertebral disc pressure, risking disc bulges/herniation over time.",
-    'lateral_trunk_tilt_left': "Asymmetric loading strains shoulder and neck muscles unevenly.",
-    'lateral_trunk_tilt_right': "Asymmetric loading strains shoulder and neck muscles unevenly.",
-    'posterior_trunk_recline': "Excessive reclining without lumbar support reduces natural spinal curve support, associated with low back pain risk."
-}
+mock_classifier = MockBinaryClassifier()
 
 @app.get("/")
 def read_root():
     return {
         "status": "online",
-        "system": "AI Sitting Posture Detection System API",
+        "system": "AI Sitting Posture Detection System API (Binary)",
         "version": "1.0.0"
     }
 
@@ -95,17 +88,13 @@ async def websocket_posture_endpoint(websocket: WebSocket):
             t0 = time.time()
             now = time.time()
 
+            active_cameras = ["front"]
+
             # Check if we have active genuine keypoints from browser video feed within 1.5 seconds
             if latest_live_features is not None and (now - last_keypoint_time < 1.5):
-                front_pred = process_front_camera_inference(latest_live_features)
-                active_preds = {'front': front_pred}
-                fused_result = fuse_camera_predictions(active_preds)
-                fused_result['features'] = latest_live_features
-                fused_result['analysis_mode'] = 'Single-Camera Analysis (Front-View)'
-                fused_result['health_message'] = HEALTH_MESSAGES.get(fused_result['posture_label'], "")
-                fused_result['timestamp'] = round(time.time(), 3)
-
-                await websocket.send_json(fused_result)
+                result = mock_classifier.evaluate_posture(active_cameras, latest_live_features)
+                result['timestamp'] = round(time.time(), 3)
+                await websocket.send_json(result)
             else:
                 # Dynamic demo stream fallback when video feed is offline/paused
                 step_counter += 1
@@ -119,15 +108,9 @@ async def websocket_posture_endpoint(websocket: WebSocket):
                     'torso_lateral_lean_angle': sim_torso_lean
                 }
 
-                front_pred = process_front_camera_inference(sim_features)
-                active_preds = {'front': front_pred}
-                fused_result = fuse_camera_predictions(active_preds)
-                fused_result['features'] = sim_features
-                fused_result['analysis_mode'] = 'Single-Camera Analysis (Front-View)'
-                fused_result['health_message'] = HEALTH_MESSAGES.get(fused_result['posture_label'], "")
-                fused_result['timestamp'] = round(time.time(), 3)
-
-                await websocket.send_json(fused_result)
+                result = mock_classifier.evaluate_posture(active_cameras, sim_features)
+                result['timestamp'] = round(time.time(), 3)
+                await websocket.send_json(result)
 
             elapsed = time.time() - t0
             await asyncio.sleep(max(0.01, 0.15 - elapsed))
