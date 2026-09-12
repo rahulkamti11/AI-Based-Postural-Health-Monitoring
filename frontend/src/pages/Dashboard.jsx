@@ -3,11 +3,9 @@ import { postureSocket } from '../services/websocketClient';
 import Header from '../components/Header';
 import CameraCard from '../components/CameraCard';
 import InfoBanner from '../components/InfoBanner';
-import SessionSummary from '../components/SessionSummary';
 import BadPostureModal from '../components/BadPostureModal';
 import { CameraStatus } from '../components/CameraStatus';
 import { PostureLiveView } from '../components/PostureLiveView';
-import { AlertBanner } from '../components/AlertBanner';
 import { PostureHistoryChart } from '../components/PostureHistoryChart';
 
 export function Dashboard() {
@@ -15,11 +13,12 @@ export function Dashboard() {
   const [isConnected, setIsConnected] = useState(false);
   const [history, setHistory] = useState([]);
   const [availableDevices, setAvailableDevices] = useState([]);
-  const [systemActive, setSystemActive] = useState(true);
+  const [systemActive, setSystemActive] = useState(false);
 
   // Togglable alert options
   const [audioAlertEnabled, setAudioAlertEnabled] = useState(true);
   const [visualAlertEnabled, setVisualAlertEnabled] = useState(true);
+  const [showVideoFeeds, setShowVideoFeeds] = useState(true);
   const [showBadPostureModal, setShowBadPostureModal] = useState(false);
 
   // Session Analytics State
@@ -65,9 +64,16 @@ export function Dashboard() {
     }
   }, []);
 
+  const [isScanning, setIsScanning] = useState(false);
+  const [toastMessage, setToastMessage] = useState(null);
+
   // Smart camera device auto-mapping
   const refreshDevices = useCallback(async () => {
+    setIsScanning(true);
     try {
+      // Simulate a slight delay so the rotation is visible and UX feels like a "scan"
+      await new Promise(resolve => setTimeout(resolve, 800));
+
       let devices = await navigator.mediaDevices.enumerateDevices();
       let videoDevices = devices.filter(dev => dev.kind === 'videoinput');
 
@@ -82,7 +88,17 @@ export function Dashboard() {
         }
       }
 
-      setAvailableDevices(videoDevices);
+      setAvailableDevices(prevDevices => {
+        const diff = videoDevices.length - prevDevices.length;
+        if (diff > 0) {
+          showToast(`Scan complete: Found ${diff} new camera(s)!`);
+        } else if (diff < 0) {
+          showToast(`Scan complete: ${Math.abs(diff)} camera(s) disconnected.`);
+        } else {
+          showToast(`Scan complete: No new cameras found.`);
+        }
+        return videoDevices;
+      });
 
       if (videoDevices.length > 0) {
         // Auto-assign laptop built-in camera to Cam 1
@@ -105,16 +121,31 @@ export function Dashboard() {
       }
     } catch (err) {
       console.error('Error scanning video devices:', err);
+      showToast('Error scanning for cameras.');
+    } finally {
+      setIsScanning(false);
     }
   }, []);
+
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
 
   useEffect(() => {
     refreshDevices();
   }, []);
 
   useEffect(() => {
-    postureSocket.connect();
+    if (systemActive) {
+      postureSocket.connect();
+    } else {
+      postureSocket.disconnect();
+      setPostureData(null);
+    }
+  }, [systemActive]);
 
+  useEffect(() => {
     const unsubscribeStatus = postureSocket.subscribeStatus((status) => {
       setIsConnected(status === 'connected');
     });
@@ -187,99 +218,94 @@ export function Dashboard() {
     }
   }, [consecutiveBadSeconds, visualAlertEnabled, systemActive]);
 
-  // Compute most frequent bad posture label
-  const getMostFrequentBadLabel = () => {
-    let maxCount = 0;
-    let topLabel = 'None';
-    Object.entries(labelCounts).forEach(([lbl, count]) => {
-      if (lbl !== 'neutral_spinal_alignment' && count > maxCount) {
-        maxCount = count;
-        topLabel = lbl;
-      }
-    });
-    return topLabel;
-  };
 
   const postureQuality = postureData?.overall_quality || 'good';
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans p-4 md:p-8">
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans px-4 md:px-8 pb-8 pt-24">
       <div className="app-container">
         {/* Master Control Header */}
         <Header
           systemActive={systemActive}
           onToggleSystem={() => setSystemActive(prev => !prev)}
-          onRefreshDevices={refreshDevices}
-          availableDevicesCount={availableDevices.length}
           audioAlertEnabled={audioAlertEnabled}
           onToggleAudioAlert={() => setAudioAlertEnabled(prev => !prev)}
           visualAlertEnabled={visualAlertEnabled}
           onToggleVisualAlert={() => setVisualAlertEnabled(prev => !prev)}
+          showVideoFeeds={showVideoFeeds}
+          onToggleVideoFeeds={() => setShowVideoFeeds(prev => !prev)}
+          isConnected={isConnected}
+          onRefreshDevices={refreshDevices}
+          availableDevicesCount={availableDevices.length}
+          isScanning={isScanning}
         />
 
-        {/* Active Session Ergonomic Analytics Summary */}
-        <SessionSummary
+        {/* Global Toast Notification */}
+        {toastMessage && (
+          <div className="fixed top-20 right-6 z-50 animate-in slide-in-from-right fade-in duration-300">
+            <div className="bg-slate-800 text-white text-sm font-semibold px-4 py-3 rounded-lg shadow-lg flex items-center space-x-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+              <span>{toastMessage}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Top Consolidated Overview & Telemetry Section */}
+        <PostureLiveView 
+          postureData={systemActive ? postureData : null} 
+          systemActive={systemActive} 
           sessionSeconds={sessionSeconds}
           goodSeconds={goodSeconds}
           badSeconds={badSeconds}
-          badPostureInstances={badPostureInstances}
-          mostFrequentBadLabel={getMostFrequentBadLabel()}
         />
 
         {/* 3-Camera Preview Grid with Dynamic Green/Red Skeleton Overlays */}
-        <div className="camera-grid mb-6">
+        <div 
+          className="camera-grid mb-6"
+          style={!showVideoFeeds ? { position: 'absolute', opacity: 0, pointerEvents: 'none', transform: 'scale(0)' } : {}}
+        >
           <CameraCard
             camId="cam2"
             tagLabel="CAM 2"
             tagClass="tag-cam2"
-            title="Camera 2 (Left-Side View)"
+            title="Target: Left-Side View"
             availableDevices={availableDevices}
             selectedDeviceId={cam2DeviceId}
             onSelectDevice={setCam2DeviceId}
             onFpsUpdate={setCam2Fps}
             systemActive={systemActive}
             postureQuality={postureQuality}
+            isScanning={isScanning}
           />
 
           <CameraCard
             camId="cam1"
             tagLabel="CAM 1"
             tagClass="tag-cam1"
-            title="Camera 1 (Front View)"
+            title="Target: Front View"
             availableDevices={availableDevices}
             selectedDeviceId={cam1DeviceId}
             onSelectDevice={setCam1DeviceId}
             onFpsUpdate={setCam1Fps}
             systemActive={systemActive}
             postureQuality={postureQuality}
+            isScanning={isScanning}
           />
 
           <CameraCard
             camId="cam3"
             tagLabel="CAM 3"
             tagClass="tag-cam3"
-            title="Camera 3 (Right-Side View)"
+            title="Target: Right-Side View"
             availableDevices={availableDevices}
             selectedDeviceId={cam3DeviceId}
             onSelectDevice={setCam3DeviceId}
             onFpsUpdate={setCam3Fps}
             systemActive={systemActive}
             postureQuality={postureQuality}
+            isScanning={isScanning}
           />
         </div>
-
-        {/* Dynamic Camera Degradation Status */}
-        <CameraStatus 
-          analysisMode={postureData?.analysis_mode}
-          contributingCameras={postureData?.contributing_cameras}
-          isConnected={isConnected}
-        />
-
-        {/* Clinical Ergonomic Risk Warning Banner */}
-        <AlertBanner postureData={postureData} />
-
-        {/* Real-Time Posture Live View & Feature Metric Tiles */}
-        <PostureLiveView postureData={postureData} />
 
         {/* Real-Time Trend Visualization Graph */}
         <PostureHistoryChart historyData={history} />
