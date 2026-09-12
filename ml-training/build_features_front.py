@@ -2,8 +2,9 @@ import os
 import pandas as pd
 import numpy as np
 
-MASTER_CSV_PATH = os.path.join('dataset', 'master_dataset.csv')
-FEATURES_FRONT_PATH = os.path.join('dataset', 'features', 'features_front.csv')
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+MASTER_CSV_PATH = os.path.join(BASE_DIR, 'dataset', 'master_dataset.csv')
+FEATURES_FRONT_PATH = os.path.join(BASE_DIR, 'dataset', 'features', 'features_front.csv')
 
 def calculate_euclidean_3d(x1, y1, z1, x2, y2, z2):
     return np.sqrt((x2 - x1)**2 + (y2 - y1)**2 + (z2 - z1)**2)

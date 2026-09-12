@@ -144,7 +144,7 @@ export function Dashboard() {
       setSessionSeconds(prev => prev + 1);
       setContinuousSittingSeconds(prev => prev + 1);
 
-      const isBad = postureData?.posture_quality === 'bad';
+      const isBad = postureData?.overall_quality === 'bad';
 
       if (isBad) {
         setBadSeconds(prev => prev + 1);
@@ -200,7 +200,7 @@ export function Dashboard() {
     return topLabel;
   };
 
-  const postureQuality = postureData?.posture_quality || 'good';
+  const postureQuality = postureData?.overall_quality || 'good';
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans p-4 md:p-8">
