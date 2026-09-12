@@ -40,6 +40,7 @@ class MockBinaryClassifier:
             "quality_confidence": confidence,
             "decided_by": "ML_BINARY_MODEL_MOCK",
             "active_cameras": active_cameras,
+            "features": features,
             "feedback": {
                 "alert_level": alert_level,
                 "message": message
