@@ -70,7 +70,7 @@ export function CameraCard({
 
     try {
       poseInstance = new Pose({
-        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
       });
 
       poseInstance.setOptions({
@@ -379,6 +379,7 @@ export function CameraCard({
               className={`feed-video ${isMirrored ? 'mirrored' : ''} ${fitCover ? 'fit-cover' : ''}`}
               playsInline
               muted
+              autoPlay
             />
 
             <canvas ref={canvasRef} className={`skeleton-canvas ${fitCover ? 'fit-cover' : ''}`} />
@@ -431,9 +432,6 @@ export function CameraCard({
           </button>
         </div>
 
-        <span style={{ fontSize: '0.75rem', color: '#64748b', fontFamily: 'monospace' }}>
-          {camId === 'cam1' ? 'Target: Front View' : (camId === 'cam2' ? 'Target: Left-Side View' : 'Target: Right-Side View')}
-        </span>
       </div>
     </div>
   );
