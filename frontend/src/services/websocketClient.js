@@ -20,6 +20,7 @@ export class PostureWebSocketClient {
     }
 
     try {
+      this.intentionalDisconnect = false;
       this.ws = new WebSocket(this.url);
 
       this.ws.onopen = () => {
@@ -43,7 +44,9 @@ export class PostureWebSocketClient {
       this.ws.onclose = () => {
         this.isConnected = false;
         this.notifyStatus('disconnected');
-        this.scheduleReconnect();
+        if (!this.intentionalDisconnect) {
+          this.scheduleReconnect();
+        }
       };
 
       this.ws.onerror = (err) => {
@@ -105,6 +108,7 @@ export class PostureWebSocketClient {
   }
 
   disconnect() {
+    this.intentionalDisconnect = true;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -113,6 +117,8 @@ export class PostureWebSocketClient {
       this.ws.close();
       this.ws = null;
     }
+    this.isConnected = false;
+    this.notifyStatus('disconnected');
   }
 }
 
