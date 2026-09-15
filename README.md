@@ -1,202 +1,81 @@
 <div align="center">
-
-# 🪑 AI-Based Sitting Posture Detection & Postural Health Monitoring System
-
-### *Modular Multi-Camera Vision & Hybrid ML-Rule Inference Platform*
-
-[![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.109-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![React](https://img.shields.io/badge/React-18.2-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
-[![Vite](https://img.shields.io/badge/Vite-5.2-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
-[![MediaPipe](https://img.shields.io/badge/MediaPipe-0.10-00C0FF?style=for-the-badge&logo=google&logoColor=white)](https://mediapipe.dev/)
-[![scikit-learn](https://img.shields.io/badge/scikit--learn-1.4-F7931E?style=for-the-badge&logo=scikit-learn&logoColor=white)](https://scikit-learn.org/)
-[![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
-
+  <h1>🤖 AI-Based Sitting Posture Detection & Postural Health Monitoring Platform</h1>
+  <p><strong>A Real-Time, Multi-Camera, Privacy-Preserving Ergonomics System</strong></p>
 </div>
 
----
+<br>
 
-## 📌 Executive Summary
-
-The **AI-Based Sitting Posture Detection and Postural Health Monitoring System** is an end-to-end computer vision and machine learning platform engineered to address workplace ergonomics, spinal misalignment, and sedentary health risks. Designed for multi-camera environments, the system analyzes human body spatial orientation in real-time, extracts 33 3D skeletal pose keypoints, computes 3D geometric spatial features, and executes a **hybrid inference engine** combining clinical rule cutoffs with trained classical machine learning classifiers.
-
-> [!IMPORTANT]
-> **Key Innovation:** Unlike traditional single-view posture trackers that fail when a user turns or obscures their camera, this system features a **Graceful Degradation Multi-Camera Fusion Engine** (Front Coronal + Left/Right Sagittal Views) that seamlessly adapts inference confidence and model weighting based on active camera feeds.
+## 📖 Project Overview
+This project delivers a real-time, privacy-preserving, Multi-Camera Artificial Intelligence system to monitor sitting ergonomics. It leverages **MediaPipe** for local 3D skeleton extraction directly in the browser (reducing network bandwidth to near zero), and a **FastAPI Machine Learning Backend** to enforce clinical biomechanical thresholds and classify specific postural defects using trained **Random Forest** models.
 
 ---
 
-## ✨ Key System Capabilities
+## 🏛️ System Architecture & Multi-Camera Fallback
+The system utilizes a **Graceful Degradation Multi-Camera Architecture**. A single camera cannot mathematically capture all posture defects (e.g., a 2D front webcam cannot measure Z-axis spine curvature). 
+To solve this, the pipeline is divided into camera-specific independent expert models:
 
-<table>
-  <tr>
-    <td width="50%">
-      <h3>🎥 Multi-Camera WebRTC Grid</h3>
-      <ul>
-        <li><b>3 Video Viewports:</b> Front View (Laptop Webcam) + Left/Right Side Views (Smartphones via Iriun/DroidCam).</li>
-        <li><b>Smart Hardware Auto-Mapping:</b> Automatically detects and maps built-in vs virtual USB/WiFi webcams.</li>
-        <li><b>Live Controls:</b> Independent feed power (ON/OFF), mirror flip, crop/fill aspect ratio, and FPS counters.</li>
-      </ul>
-    </td>
-    <td width="50%">
-      <h3>🧠 Hybrid Rule-ML Inference Engine</h3>
-      <ul>
-        <li><b>Clinical Rule Engine:</b> Enforces Craniovertebral Angle (CVA $< 48^\circ$) and empirical lateral lean cutoffs ($> 15^\circ$).</li>
-        <li><b>Trained RBF SVM Model:</b> Optimized Support Vector Machine ($C=10.0, \gamma=0.1$) trained via GroupKFold CV.</li>
-        <li><b>Sub-Millisecond Speed:</b> CPU inference latency of <b>0.181 ms / sample</b>.</li>
-      </ul>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
-      <h3>🟢🔴 Dynamic Pose Overlay Coloring</h3>
-      <ul>
-        <li><b>Good Posture:</b> Glowing skeletal connector lines and keypoint joint nodes render in <b>Green</b>.</li>
-        <li><b>Bad Posture:</b> Overlay dynamically shifts to <b>Red</b> upon detecting misalignment.</li>
-        <li><b>Toggleable Rendering:</b> One-click skeleton visibility toggle.</li>
-      </ul>
-    </td>
-    <td width="50%">
-      <h3>🔔 Session Analytics & Togglable Alerts</h3>
-      <ul>
-        <li><b>Session Summary:</b> Live duration timer, Posture Health Score (0–100%), and bad posture instance counters.</li>
-        <li><b>Audio Sitting Chime (> 60s):</b> Plays soft Web Audio chime when sitting continuously past 1 minute.</li>
-        <li><b>Visual Popup Modal (> 30s):</b> Interactive warning popup with corrective ergonomic guidance.</li>
-      </ul>
-    </td>
-  </tr>
-</table>
+1. **Front Camera Inference (Coronal Plane)**
+   - Physically capable of detecting left/right imbalances.
+   - **Target Labels:** `asymmetricalLean` vs `normal`.
+2. **Side Camera Inference (Sagittal Plane)**
+   - Physically capable of detecting forward/backward spinal curves.
+   - **Target Labels:** `forwardHead` (Text Neck), `slouch` (Kyphosis), `slidingDown` (Posterior Tilt) vs `normal`.
+
+**Rule Engine Coordination (Backend):**
+The backend aggregates available data streams. If multiple cameras are active, it calculates features for each and runs respective models. If any camera detects a defect, an overall `bad` quality alert is triggered. If only one camera is connected (e.g., just a laptop webcam), it gracefully falls back to monitoring only the defects visible to that single camera.
 
 ---
 
-## 🏗️ System Architecture & Data Flow Pipeline
+## 📊 Machine Learning Benchmarks & Validation
+Models were trained using Python `scikit-learn` on engineered numerical clinical angles (e.g. CVA, Torso Lean, Shoulder Tilt) derived from a web-curated 240-image multi-angle dataset.
 
-The platform follows a clean decoupled microservices architecture connecting browser WebRTC video streams to Python FastAPI machine learning services over high-performance WebSockets:
-
-```text
-+-----------------------------------------------------------------------------------+
-|                                 FRONTEND LAYER                                    |
-|              React (Vite) Dashboard + Tailwind CSS + Recharts Visualization        |
-|  +-----------------------------------------------------------------------------+  |
-|  | WebRTC Video Capture -> MediaPipe JS Keypoint Extractor -> WebSocket Client  |  |
-|  |  CameraCard.jsx | SessionSummary.jsx | BadPostureModal.jsx | AlertBanner.jsx  |  |
-|  |  PostureLiveView.jsx | CameraStatus.jsx | PostureHistoryChart.jsx           |  |
-|  +-----------------------------------------------------------------------------+  |
-+-----------------------------------------------------------------------------------+
-                                         │
-                                         │ Live 3D Landmark JSON (Client -> Server @ 10 FPS)
-                                         │ Fused Prediction JSON (Server -> Client @ 10 FPS)
-                                         ▼
-+-----------------------------------------------------------------------------------+
-|                                 BACKEND LAYER                                     |
-|                       FastAPI Server (Python 3.12)                                |
-|  +-----------------------------------------------------------------------------+  |
-|  |                            Inference Engine                                 |  |
-|  |  +---------------------------+       +-----------------------------------+  |  |
-|  |  |   Rule Engine Evaluator   | ----> | ML Classifier Fallback (SVM RBF)  |  |  |
-|  |  +---------------------------+       +-----------------------------------+  |  |
-|  |                                  │                                          |  |
-|  |                                  ▼                                          |  |
-|  |                     Weighted Camera Fusion Engine                           |  |
-|  |       (Front: 1.2, Left: 1.0, Right: 1.0) + Degradation Mode Tracker       |  |
-|  +-----------------------------------------------------------------------------+  |
-+-----------------------------------------------------------------------------------+
-```
-
----
-
-## 🏷️ Posture Classification & Ergonomic Mapping
-
-The system enforces a **two-tier classification scheme**:
-$$\text{posture\_quality} = \begin{cases} \text{good}, & \text{if } \text{posture\_label} = \text{neutral\_spinal\_alignment} \\ \text{bad}, & \text{otherwise} \end{cases}$$
-
-| Technical `posture_label` | `posture_quality` | Detection View | Skeleton Color | Ergonomic Health Risk & Medical Context |
-|---|---|---|---|---|
-| `neutral_spinal_alignment` | `good` | Front + Side | 🟢 **Green** | Balanced spine alignment; minimal muscular strain. |
-| `thoracic_kyphotic_slouch` | `bad` | Side | 🔴 **Red** | Increased intervertebral disc pressure; elevated risk of lumbar herniation. |
-| `cervical_forward_head_posture` | `bad` | Side | 🔴 **Red** | Strains cervical extensor muscles; directly linked to neck pain severity (CVA $< 48^\circ$). |
-| `lateral_trunk_tilt_left` | `bad` | Front | 🔴 **Red** | Asymmetric coronal loading; uneven muscular fatigue across left shoulder/torso. |
-| `lateral_trunk_tilt_right` | `bad` | Front | 🔴 **Red** | Asymmetric coronal loading; uneven muscular fatigue across right shoulder/torso. |
-| `posterior_trunk_recline` | `bad` | Side | 🔴 **Red** | Excessive backward lean without lumbar support; reduces natural lumbar curve. |
-
----
-
-## 📐 Geometric Feature Engineering
-
-From 33 extracted MediaPipe 3D pose landmarks $(x, y, z)$, 4 core coronal geometric features are computed per frame:
-
-1. **Torso Lateral Lean Angle ($\theta_{\text{torso}}$):**
-   $$\theta_{\text{torso}} = \text{atan2}(x_{\text{shoulder-mid}} - x_{\text{hip-mid}}, -(y_{\text{shoulder-mid}} - y_{\text{hip-mid}})) \times \frac{180}{\pi}$$
-
-2. **Shoulder Tilt Angle ($\theta_{\text{shoulder}}$):**
-   $$\theta_{\text{shoulder}} = \text{atan2}(y_{\text{right-shoulder}} - y_{\text{left-shoulder}}, x_{\text{right-shoulder}} - x_{\text{left-shoulder}}) \times \frac{180}{\pi}$$
-
-3. **Shoulder Symmetry Ratio ($R_{\text{symmetry}}$):**
-   $$R_{\text{symmetry}} = \frac{d(\text{nose}, \text{left-shoulder})}{d(\text{nose}, \text{right-shoulder}) + \epsilon}$$
-
-4. **Head Lateral Offset ($\Delta x_{\text{head}}$):**
-   $$\Delta x_{\text{head}} = x_{\text{nose}} - \frac{x_{\text{left-shoulder}} + x_{\text{right-shoulder}}}{2}$$
-
----
-
-## 📊 Machine Learning Benchmarking & Validation
-
-Training was conducted on the **MultiPosture Zenodo Dataset** (Record `14230872`, 4,794 raw frames reduced to **1,029 subsampled frames** via session-based $N=5$ endpoint-preserving de-duplication). Models were validated using **5-Fold GroupKFold Cross-Validation** grouped strictly by subject ID (13 subjects) to eliminate data leakage:
-
-| Classifier Model | Hyperparameters | 5-Fold CV Accuracy | Latency (CPU) | Status |
-|---|---|---|---|---|
-| **Support Vector Machine (SVM)** | **RBF Kernel ($C=10.0, \gamma=0.1$)** | **66.82%** | **0.181 ms** | **Selected Model** |
-| Random Forest | 100 Trees (`max_depth=10`) | 59.32% | 0.110 ms | Baseline |
-| Logistic Regression | L2 Regularization ($C=1.0$) | 52.13% | 0.004 ms | Baseline |
+| Classifier Model | Camera Target | Validation Accuracy | Inference Mechanism |
+|---|---|---|---|
+| **Random Forest** | **Front Camera** | **100.00%** | `asymmetricalLean` vs `normal` |
+| **Random Forest** | **Side Camera(s)** | **81.25%** | `forwardHead`, `slouch`, `slidingDown` vs `normal` |
 
 ---
 
 ## 📁 Repository Directory Structure
 
-```
+```text
 AI-Based-Postural-Health-Monitoring/
 ├── backend/                            # FastAPI Server & Python Backend
 │   ├── app/
 │   │   ├── main.py                     # Server entrypoint & WebSocket /ws/posture stream
 │   │   ├── camera/                     # Hardware camera discovery & capture manager
-│   │   │   ├── availability.py
-│   │   │   └── capture.py
-│   │   ├── pose/                       # MediaPipe landmark & feature extractor
+│   │   ├── pose/                       # MediaPipe landmark & exact math feature extractor
 │   │   │   └── mediapipe_extractor.py
-│   │   ├── models/                     # Trained ML models (.pkl) & scalers
-│   │   │   ├── front_model.pkl
-│   │   │   └── front_scaler.pkl
-│   │   └── inference/                  # CVA Rule engine & weighted camera fusion
-│   │       ├── rule_engine.py
-│   │       └── fusion_logic.py
+│   │   └── inference/                  # Live ML Inference Engine & Fallback logic
+│   │       └── binary_logic.py
 │   └── requirements.txt                # Python backend dependencies
-├── frontend/                           # React + Vite Dashboard Application
+├── frontend/                           # React 18 + Vite Dashboard Application
 │   ├── src/
 │   │   ├── components/                 # React UI Cards & Alert Modals
-│   │   │   ├── CameraCard.jsx          # 3-Camera preview grid & skeleton overlay
+│   │   │   ├── CameraCard.jsx          # 3-Camera preview grid & MediaPipe skeleton overlay
 │   │   │   ├── Header.jsx              # Master controls & alert toggles
 │   │   │   ├── SessionSummary.jsx      # Live duration, health score, & stats
 │   │   │   ├── BadPostureModal.jsx     # 30s bad posture warning popup modal
 │   │   │   ├── PostureLiveView.jsx     # Live posture status & metric tiles
-│   │   │   ├── PostureHistoryChart.jsx # Recharts real-time trend area graph
-│   │   │   └── AlertBanner.jsx         # Clinical health risk warnings
+│   │   │   └── PostureHistoryChart.jsx # Recharts real-time trend area graph
 │   │   ├── pages/
 │   │   │   └── Dashboard.jsx           # Main unified dashboard page
 │   │   └── services/
-│   │       └── websocketClient.js      # WebSocket client with keypoint streaming
+│   │       └── websocketClient.js      # WebSocket client sending lightweight landmarks
 │   ├── package.json
-│   ├── tailwind.config.js              # Tailwind CSS v3 configuration
-│   └── vite.config.js
-├── ml-training/                        # Dataset Pipeline & Training Notebooks
-│   ├── build_master_dataset.py         # Raw parsing & session subsampling (N=5)
-│   ├── build_features_front.py         # 4-front feature matrix generator
-│   ├── train_front_model.py            # GroupKFold CV & grid search optimization
-│   └── notebooks/
-│       └── eda_features_front.ipynb    # Jupyter EDA notebook with feature plots
+│   └── tailwind.config.js              # Tailwind CSS v3 configuration
+├── ml-training/                        # Dataset Pipeline & Training Scripts
+│   ├── build_features.py               # Math engine generating features_front.csv & features_side.csv
+│   ├── train_models.py                 # RF & SVM Model training and benchmarking
+│   ├── create_simple_plots.py          # EDA Plot generator (Bar & Scatter)
+│   └── saved_models/                   # Active Champion Models
+│       ├── front_model.pkl
+│       └── side_model.pkl
 ├── dataset/                            # Dataset & Plot Storage
-│   ├── master_dataset.csv
-│   └── features/
-│       └── features_front.csv
+│   ├── master_dataset.csv              # Raw MediaPipe landmarks
+│   ├── features_front.csv              # Front ML dataset (80 rows)
+│   ├── features_side.csv               # Side ML dataset (160 rows)
+│   └── eda_plots/                      # Exploratory Data Analysis PNGs
 ├── docs/
 │   └── REPORT.md                       # Formal human-authored technical report
 └── README.md                           # Comprehensive project overview
@@ -204,84 +83,50 @@ AI-Based-Postural-Health-Monitoring/
 
 ---
 
-## ⚡ Quickstart & Installation Guide
-
-Follow these steps to clone, set up, and run the project on any computer:
+## 🚀 Quickstart & Installation Guide
 
 ### Prerequisites
-- **Git**
-- **Python:** `3.10` -- `3.12`
+- **Python:** `3.10` - `3.12`
 - **Node.js:** `v18.0.0` or higher
-- **npm:** `v9.0.0` or higher
-
----
 
 ### Step 1: Clone the Repository
-
 ```bash
 git clone https://github.com/rahulkamti11/AI-Based-Postural-Health-Monitoring.git
 cd AI-Based-Postural-Health-Monitoring
 ```
 
----
-
 ### Step 2: Set Up & Launch Python FastAPI Backend
-
-#### On Windows (PowerShell):
+**On Windows (PowerShell):**
 ```powershell
 cd backend
-
-# Create Python virtual environment
 python -m venv .venv
-
-# Activate virtual environment
 .\.venv\Scripts\Activate.ps1
-
-# Install backend dependencies
 pip install -r requirements.txt
-
-# Launch FastAPI Uvicorn Server
 python -m uvicorn app.main:app --reload --port 8000
 ```
 
-#### On macOS / Linux (Terminal):
+**On macOS / Linux (Terminal):**
 ```bash
 cd backend
-
-# Create Python virtual environment
 python3 -m venv .venv
-
-# Activate virtual environment
 source .venv/bin/activate
-
-# Install backend dependencies
 pip install -r requirements.txt
-
-# Launch FastAPI Uvicorn Server
 python3 -m uvicorn app.main:app --reload --port 8000
 ```
 > The FastAPI backend server will start at `http://127.0.0.1:8000` with live WebSocket streaming at `ws://localhost:8000/ws/posture`.
 
----
-
 ### Step 3: Set Up & Launch React Frontend Dashboard
-
 Open a **new terminal window** and run:
-
 ```bash
 cd frontend
-
-# Install Node modules
 npm install
-
-# Start Vite React Development Server
 npm run dev
 ```
 > Open your browser and navigate to `http://localhost:5173` to access the live dashboard.
 
 ---
 
-## 🔌 WebSocket API Payload Specification
+## 📡 WebSocket API Payload Specification
 
 ### Client Keypoint Request (`Client -> Server @ ws://localhost:8000/ws/posture`):
 ```json
@@ -290,45 +135,29 @@ npm run dev
   "camera_id": "front",
   "landmarks": {
     "nose": { "x": 0.512, "y": 0.324, "z": -0.150, "visibility": 0.99 },
-    "left_shoulder": { "x": 0.620, "y": 0.480, "z": -0.050, "visibility": 0.98 },
-    "right_shoulder": { "x": 0.404, "y": 0.475, "z": -0.045, "visibility": 0.98 }
-  },
-  "timestamp": 1756080000.123
+    "left_shoulder": { "x": 0.620, "y": 0.480, "z": -0.050, "visibility": 0.98 }
+  }
 }
 ```
 
-### Server Prediction Response (`Server -> Client`):
+### Server ML Prediction Response (`Server -> Client`):
 ```json
 {
-  "posture_label": "lateral_trunk_tilt_left",
-  "posture_quality": "bad",
-  "confidence": 0.95,
-  "decided_by": "rule_engine",
-  "rule_triggered": "Empirical torso_lateral_lean_angle > 15.0°",
-  "analysis_mode": "Single-Camera Analysis (Front-View)",
-  "contributing_cameras": ["front"],
-  "features": {
-    "shoulder_tilt_angle": -150.56,
-    "shoulder_symmetry_ratio": 1.15,
-    "head_lateral_offset": 0.045,
-    "torso_lateral_lean_angle": 36.94
+  "overall_quality": "bad",
+  "quality_confidence": 0.95,
+  "decided_by": "ML_ENSEMBLE",
+  "active_cameras": ["front", "left"],
+  "posture_label": "asymmetricalLean",
+  "feedback": {
+    "alert_level": "WARNING",
+    "message": "Asymmetrical leaning detected! Balance your shoulders."
   },
-  "health_message": "Asymmetric loading strains shoulder and neck muscles unevenly.",
+  "features_used": {
+    "front": {
+      "shoulder_tilt_angle": 19.3,
+      "torso_lateral_lean_angle": 15.2
+    }
+  },
   "timestamp": 1756080000.200
 }
 ```
-
----
-
-## 📄 License & Dataset Citation
-
-This project is developed under the **MIT License**. The underlying training datasets originate from:
-- **MultiPosture Dataset:** Carneros-Prado et al., 2024 (Zenodo Record `14230872`), licensed under Creative Commons Attribution 4.0 International (CC BY 4.0).
-
----
-
-<div align="center">
-
-**AI-Based Sitting Posture Detection & Postural Health Monitoring Platform**
-
-</div>
