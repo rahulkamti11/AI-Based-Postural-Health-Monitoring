@@ -49,6 +49,8 @@ class PostureModelInference:
         if "front" in active_cameras and "front" in features_payload and self.front_model:
             try:
                 df_f = pd.DataFrame([features_payload["front"]])
+                # Enforce correct column order
+                df_f = df_f[['shoulder_tilt_angle', 'shoulder_symmetry_ratio', 'head_lateral_offset', 'torso_lateral_lean_angle']]
                 # Front model predicts 'asymmetricalLean' or 'normal'
                 front_prediction = self.front_model.predict(df_f)[0]
             except Exception as e:
@@ -64,6 +66,8 @@ class PostureModelInference:
         if side_data and self.side_model:
             try:
                 df_s = pd.DataFrame([side_data])
+                # Enforce correct column order
+                df_s = df_s[['neck_angle', 'torso_lean_angle', 'head_forward_dist', 'spine_curve_angle']]
                 # Side model predicts 'slouch', 'forwardHead', 'slidingDown', or 'normal'
                 side_prediction = self.side_model.predict(df_s)[0]
             except Exception as e:
