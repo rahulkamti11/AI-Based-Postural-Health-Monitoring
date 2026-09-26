@@ -152,9 +152,16 @@ export function Dashboard() {
 
     const unsubscribeMessage = postureSocket.subscribe((data) => {
       setPostureData(data);
-      if (data.timestamp && data.features) {
+      if (data.timestamp && data.features_used) {
+        // Flatten the features for the charts and views
+        const flatFeatures = { 
+          ...(data.features_used.front || {}), 
+          ...(data.features_used.left || {}), 
+          ...(data.features_used.right || {}) 
+        };
+        const dataWithFeatures = { ...data, features: flatFeatures };
         setHistory((prev) => {
-          const updated = [...prev, data];
+          const updated = [...prev, dataWithFeatures];
           return updated.slice(-30);
         });
       }
@@ -201,15 +208,15 @@ export function Dashboard() {
     return () => clearInterval(timer);
   }, [systemActive, postureData]);
 
-  // Audio alert check: Continuous sitting > 60 seconds
+  // Audio alert check: Consecutive bad posture > 60 seconds
   useEffect(() => {
-    if (audioAlertEnabled && systemActive && continuousSittingSeconds > 60) {
+    if (audioAlertEnabled && systemActive && consecutiveBadSeconds > 60) {
       if (Date.now() - lastAudioTriggerRef.current > 60000) {
         playChimeSound();
         lastAudioTriggerRef.current = Date.now();
       }
     }
-  }, [continuousSittingSeconds, audioAlertEnabled, systemActive, playChimeSound]);
+  }, [consecutiveBadSeconds, audioAlertEnabled, systemActive, playChimeSound]);
 
   // Visual modal alert check: Consecutive bad posture > 30 seconds
   useEffect(() => {

@@ -42,7 +42,11 @@ export function PostureLiveView({ postureData, systemActive, sessionSeconds, goo
     showConfidence = !!postureData?.quality_confidence;
   }
 
-  const features = postureData?.features || {};
+  const features = {
+    ...(postureData?.features_used?.front || {}),
+    ...(postureData?.features_used?.left || {}),
+    ...(postureData?.features_used?.right || {})
+  };
 
   return (
     <div className={`border rounded-xl p-6 mb-6 shadow-sm transition-colors duration-300 ${boxClass}`}>
