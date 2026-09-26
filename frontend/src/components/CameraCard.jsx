@@ -219,7 +219,7 @@ export function CameraCard({
     const canvas = canvasRef.current;
     const video = videoRef.current;
 
-    if (!canvas || !video || !systemActive || !isPoweredOn) return;
+    if (!canvas || !video) return;
 
     const ctx = canvas.getContext('2d');
     const width = video.videoWidth || 640;
