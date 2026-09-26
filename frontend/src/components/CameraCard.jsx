@@ -74,7 +74,7 @@ export function CameraCard({
       });
 
       poseInstance.setOptions({
-        modelComplexity: 1,
+        modelComplexity: 0, // Lite model for massive CPU savings in multi-camera setups
         smoothLandmarks: true,
         enableSegmentation: false,
         minDetectionConfidence: 0.5,
@@ -172,30 +172,36 @@ export function CameraCard({
 
   useEffect(() => {
     let isMounted = true;
+    let lastPoseRunTime = 0;
+    const TARGET_FPS = 10; // Cap ML inference to 10 FPS to prevent browser freezing
+    const FRAME_MS = 1000 / TARGET_FPS;
 
     async function processFrame() {
       if (!isMounted) return;
 
       const video = videoRef.current;
       if (systemActive && isPoweredOn && video && video.readyState >= 2 && video.videoWidth > 0 && poseRef.current && isStreaming) {
-        if (!isProcessingRef.current) {
-          isProcessingRef.current = true;
-          try {
-            await poseRef.current.send({ image: video });
-          } catch (e) {
-            // Ignore transient frame skips
-          } finally {
-            isProcessingRef.current = false;
-          }
+        const now = performance.now();
+        if (now - lastPoseRunTime >= FRAME_MS) {
+          if (!isProcessingRef.current) {
+            isProcessingRef.current = true;
+            try {
+              lastPoseRunTime = now;
+              await poseRef.current.send({ image: video });
+            } catch (e) {
+              // Ignore transient frame skips
+            } finally {
+              isProcessingRef.current = false;
+            }
 
-          const now = performance.now();
-          frameCountRef.current++;
-          if (now - lastTimeRef.current >= 1000) {
-            const currentFps = Math.round((frameCountRef.current * 1000) / (now - lastTimeRef.current));
-            setFps(currentFps);
-            if (onFpsUpdate) onFpsUpdate(currentFps);
-            frameCountRef.current = 0;
-            lastTimeRef.current = now;
+            frameCountRef.current++;
+            if (performance.now() - lastTimeRef.current >= 1000) {
+              const currentFps = Math.round((frameCountRef.current * 1000) / (performance.now() - lastTimeRef.current));
+              setFps(currentFps);
+              if (onFpsUpdate) onFpsUpdate(currentFps);
+              frameCountRef.current = 0;
+              lastTimeRef.current = performance.now();
+            }
           }
         }
       }
@@ -261,8 +267,9 @@ export function CameraCard({
 
         ctx.lineWidth = 4;
         ctx.strokeStyle = strokeColor;
-        ctx.shadowColor = strokeColor;
-        ctx.shadowBlur = 10;
+        // Disabled expensive shadow effects for better performance
+        // ctx.shadowColor = strokeColor;
+        // ctx.shadowBlur = 10;
 
         for (const [i, j] of POSE_CONNECTIONS) {
           const lm1 = landmarks[i];
@@ -276,8 +283,9 @@ export function CameraCard({
         }
 
         ctx.fillStyle = '#ffffff';
-        ctx.shadowColor = '#ffffff';
-        ctx.shadowBlur = 8;
+        // Disabled expensive shadow effects for better performance
+        // ctx.shadowColor = '#ffffff';
+        // ctx.shadowBlur = 8;
 
         for (let i = 0; i < landmarks.length; i++) {
           const lm = landmarks[i];
