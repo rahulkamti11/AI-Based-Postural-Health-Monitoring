@@ -11,7 +11,7 @@ export class PostureWebSocketClient {
     this.statusListeners = new Set();
     this.reconnectTimer = null;
     this.isConnected = false;
-    this.lastSentTime = 0;
+    this.lastSentTime = {};
   }
 
   connect() {
@@ -65,8 +65,9 @@ export class PostureWebSocketClient {
    */
   sendLandmarks(landmarks, camId = 'front') {
     const now = Date.now();
-    if (now - this.lastSentTime < 100) return; // Cap at 10 FPS rate
-    this.lastSentTime = now;
+    const last = this.lastSentTime[camId] || 0;
+    if (now - last < 100) return; // Cap at 10 FPS rate
+    this.lastSentTime[camId] = now;
 
     if (this.ws && this.ws.readyState === WebSocket.OPEN && landmarks) {
       const payload = {
