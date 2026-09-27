@@ -12,6 +12,7 @@ export function PostureLiveView({ postureData, systemActive, sessionSeconds, goo
 
   const score = sessionSeconds > 0 ? Math.round((goodSeconds / sessionSeconds) * 100) : 100;
   const isGood = !postureData || postureData.overall_quality === 'good';
+  const isStandby = postureData?.overall_quality === 'standby' || postureData?.posture_label === 'offline';
   
   let boxClass = 'bg-slate-50 border-slate-200';
   let iconClass = 'bg-slate-200 text-slate-500';
@@ -23,23 +24,14 @@ export function PostureLiveView({ postureData, systemActive, sessionSeconds, goo
   let showConfidence = false;
 
   if (systemActive) {
-    if (isGood) {
-      boxClass = 'bg-emerald-50/50 border-emerald-200';
-      iconClass = 'bg-emerald-100 text-emerald-600';
-      titleClass = 'text-emerald-800';
-      descClass = 'text-emerald-700';
-      Icon = ShieldCheck;
-      title = 'Optimal Alignment';
-    } else {
-      boxClass = 'bg-rose-50 border-rose-200';
-      iconClass = 'bg-rose-100 text-rose-600 animate-pulse';
-      titleClass = 'text-rose-800';
-      descClass = 'text-rose-700';
-      Icon = AlertTriangle;
-      title = 'Posture Risk Detected';
-    }
-    message = postureData?.feedback?.message || "Current sitting posture is in healthy neutral alignment. Continue maintaining upright spine posture.";
-    showConfidence = !!postureData?.quality_confidence;
+    boxClass = 'bg-slate-50 border-slate-200';
+    iconClass = 'bg-indigo-100 text-indigo-600';
+    titleClass = 'text-slate-800';
+    descClass = 'text-slate-500';
+    Icon = Activity;
+    title = 'Live Posture Monitoring';
+    message = postureData?.feedback?.message || 'Analyzing video feeds for ergonomic alignment...';
+    showConfidence = false;
   }
 
   const features = {
@@ -48,27 +40,32 @@ export function PostureLiveView({ postureData, systemActive, sessionSeconds, goo
     ...(postureData?.features_used?.right || {})
   };
 
+  const isFrontGood = !postureData || postureData.front_quality === 'good';
+  const isSideGood = !postureData || postureData.side_quality === 'good';
+
   return (
     <div className={`border rounded-xl p-6 mb-6 shadow-sm transition-colors duration-300 ${boxClass}`}>
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200/60">
+      
+      {/* TOP ROW: Overall Title/Message & Analytics */}
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 pb-6 border-b border-slate-200/60">
         
-        {/* Left Status Area */}
+        {/* Title Area */}
         <div className="flex items-start space-x-4 flex-1">
           <div className={`w-14 h-14 rounded-full flex items-center justify-center flex-shrink-0 ${iconClass}`}>
             <Icon className="w-7 h-7" />
           </div>
-          <div>
-            <div className="flex items-center space-x-2 mb-1">
+          <div className="flex flex-col justify-center pt-1">
+            <div className="flex items-center space-x-2">
               <h3 className={`text-xl font-bold ${titleClass}`}>
                 {title}
               </h3>
-              {showConfidence && (
+              {systemActive && showConfidence && (
                 <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${isGood ? 'bg-emerald-200 text-emerald-800' : 'bg-rose-200 text-rose-800'}`}>
-                  {Math.round(postureData.quality_confidence * 100)}% CONFIDENCE
+                  {Math.round(postureData.quality_confidence * 100)}% OVERALL
                 </span>
               )}
             </div>
-            <p className={`text-sm font-medium ${descClass}`}>
+            <p className={`text-sm font-medium mt-1 ${descClass}`}>
               {message}
             </p>
           </div>
@@ -87,6 +84,67 @@ export function PostureLiveView({ postureData, systemActive, sessionSeconds, goo
                 {sessionSeconds > 0 || systemActive ? `${score}%` : '--'}
               </span>
             </div>
+          </div>
+        </div>
+
+      </div>
+
+      {/* MIDDLE ROW: DUAL BOXES (Always Visible) */}
+      <div className="mt-6 flex flex-col sm:flex-row items-stretch gap-4">
+        
+        {/* Front Status Box */}
+        <div className={`flex-1 flex flex-col p-5 rounded-xl border-2 ${!systemActive || postureData?.front_quality === 'standby' ? 'bg-slate-100 border-slate-200 opacity-70' : (isFrontGood ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200')}`}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center space-x-2">
+              <span className={`text-xs font-bold uppercase tracking-widest ${!systemActive || postureData?.front_quality === 'standby' ? 'text-slate-500' : (isFrontGood ? 'text-emerald-600' : 'text-rose-600')}`}>
+                Front View
+              </span>
+            </div>
+            {systemActive && postureData?.front_confidence > 0 && postureData?.front_quality !== 'standby' && (
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${isFrontGood ? 'bg-emerald-200 text-emerald-800' : 'bg-rose-200 text-rose-800'}`}>
+                {Math.round(postureData.front_confidence * 100)}% CONF
+              </span>
+            )}
+          </div>
+          
+          <div className="flex flex-col">
+            <h4 className={`text-2xl font-black uppercase tracking-wide ${!systemActive || postureData?.front_quality === 'standby' ? 'text-slate-600' : (isFrontGood ? 'text-emerald-800' : 'text-rose-800')}`}>
+              {!systemActive || postureData?.front_quality === 'standby' ? (postureData?.front_label === 'no_person' ? 'No Person' : 'Standby') : (isFrontGood ? 'Good Posture' : 'Bad Posture')}
+            </h4>
+            
+            {systemActive && postureData?.front_quality !== 'standby' && (
+              <span className={`text-sm font-semibold mt-1 capitalize ${isFrontGood ? 'text-emerald-600' : 'text-rose-600'}`}>
+                Detected: {postureData?.front_label === 'normal' ? 'Optimal Alignment' : postureData?.front_label?.replace(/([A-Z])/g, ' $1').trim()}
+              </span>
+            )}
+          </div>
+        </div>
+        
+        {/* Side Status Box */}
+        <div className={`flex-1 flex flex-col p-5 rounded-xl border-2 ${!systemActive || postureData?.side_quality === 'standby' ? 'bg-slate-100 border-slate-200 opacity-70' : (isSideGood ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200')}`}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center space-x-2">
+              <span className={`text-xs font-bold uppercase tracking-widest ${!systemActive || postureData?.side_quality === 'standby' ? 'text-slate-500' : (isSideGood ? 'text-emerald-600' : 'text-rose-600')}`}>
+                Side View
+              </span>
+            </div>
+            {systemActive && postureData?.side_confidence > 0 && postureData?.side_quality !== 'standby' && (
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${isSideGood ? 'bg-emerald-200 text-emerald-800' : 'bg-rose-200 text-rose-800'}`}>
+                {Math.round(postureData.side_confidence * 100)}% CONF
+              </span>
+            )}
+          </div>
+
+          <div className="flex flex-col">
+            <h4 className={`text-2xl font-black uppercase tracking-wide ${!systemActive || postureData?.side_quality === 'standby' ? 'text-slate-600' : (isSideGood ? 'text-emerald-800' : 'text-rose-800')}`}>
+              {!systemActive || postureData?.side_quality === 'standby' ? (postureData?.side_label === 'no_person' ? 'No Person' : 'Standby') : (isSideGood ? 'Good Posture' : 'Bad Posture')}
+            </h4>
+            
+            {systemActive && postureData?.side_quality !== 'standby' && (
+              <span className={`text-sm font-semibold mt-1 capitalize ${isSideGood ? 'text-emerald-600' : 'text-rose-600'}`}>
+                Detected: {postureData?.side_label === 'normal' ? 'Optimal Alignment' : postureData?.side_label?.replace(/([A-Z])/g, ' $1').trim()}
+              </span>
+            )}
           </div>
         </div>
 
