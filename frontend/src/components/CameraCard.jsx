@@ -67,34 +67,44 @@ export function CameraCard({
 
   useEffect(() => {
     let poseInstance = null;
+    let initTimer = null;
 
-    try {
-      poseInstance = new Pose({
-        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
-      });
+    const initPose = () => {
+      try {
+        poseInstance = new Pose({
+          locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+        });
 
-      poseInstance.setOptions({
-        modelComplexity: 0, // Lite model for massive CPU savings in multi-camera setups
-        smoothLandmarks: true,
-        enableSegmentation: false,
-        minDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.5,
-      });
+        poseInstance.setOptions({
+          modelComplexity: 0, // Lite model for massive CPU savings in multi-camera setups
+          smoothLandmarks: true,
+          enableSegmentation: false,
+          minDetectionConfidence: 0.5,
+          minTrackingConfidence: 0.5,
+        });
 
-      poseInstance.onResults((results) => {
-        handlePoseResults(results);
-      });
+        poseInstance.onResults((results) => {
+          handlePoseResults(results);
+        });
 
-      poseRef.current = poseInstance;
-    } catch (err) {
-      console.error('Failed to initialize MediaPipe Pose for feed:', err);
-    }
+        poseRef.current = poseInstance;
+      } catch (err) {
+        console.error(`Failed to initialize MediaPipe Pose for ${camId}:`, err);
+      }
+    };
+
+    // Stagger initialization to prevent browser network stall from concurrent WASM loading
+    let delay = 0;
+    if (camId === 'cam2') delay = 500;
+    if (camId === 'cam3') delay = 1000;
+    initTimer = setTimeout(initPose, delay);
 
     return () => {
+      if (initTimer) clearTimeout(initTimer);
       if (animFrameId.current) cancelAnimationFrame(animFrameId.current);
       if (poseInstance) poseInstance.close();
     };
-  }, []);
+  }, [camId]);
 
   useEffect(() => {
     let activeStream = null;
@@ -187,9 +197,12 @@ export function CameraCard({
             isProcessingRef.current = true;
             try {
               lastPoseRunTime = now;
-              await poseRef.current.send({ image: video });
+              await Promise.race([
+                poseRef.current.send({ image: video }),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Pose processing timeout')), 2000))
+              ]);
             } catch (e) {
-              // Ignore transient frame skips
+              // Ignore transient frame skips or timeouts
             } finally {
               isProcessingRef.current = false;
             }
