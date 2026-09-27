@@ -69,7 +69,7 @@ export class PostureWebSocketClient {
     if (now - last < 100) return; // Cap at 10 FPS rate
     this.lastSentTime[camId] = now;
 
-    if (this.ws && this.ws.readyState === WebSocket.OPEN && landmarks) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       const payload = {
         type: 'landmarks',
         camera_id: camId,

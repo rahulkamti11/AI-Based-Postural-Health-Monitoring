@@ -93,37 +93,49 @@ async def websocket_posture_endpoint(websocket: WebSocket):
             t0 = time.time()
             now = time.time()
 
+            connected_cameras = []
             active_cameras = []
             features_payload = {}
 
             # Process front camera
-            if latest_landmarks["front"] and (now - last_update_time["front"] < 1.5):
-                active_cameras.append("front")
-                feats = pose_extractor.compute_front_features(latest_landmarks["front"])
-                if feats: features_payload["front"] = feats
+            if now - last_update_time["front"] < 1.5:
+                connected_cameras.append("front")
+                if latest_landmarks["front"]:
+                    active_cameras.append("front")
+                    feats = pose_extractor.compute_front_features(latest_landmarks["front"])
+                    if feats: features_payload["front"] = feats
 
             # Process left camera
-            if latest_landmarks["left"] and (now - last_update_time["left"] < 1.5):
-                active_cameras.append("left")
-                feats = pose_extractor.compute_side_features(latest_landmarks["left"], view="left")
-                if feats: features_payload["left"] = feats
+            if now - last_update_time["left"] < 1.5:
+                connected_cameras.append("left")
+                if latest_landmarks["left"]:
+                    active_cameras.append("left")
+                    feats = pose_extractor.compute_side_features(latest_landmarks["left"], view="left")
+                    if feats: features_payload["left"] = feats
                 
             # Process right camera
-            if latest_landmarks["right"] and (now - last_update_time["right"] < 1.5):
-                active_cameras.append("right")
-                feats = pose_extractor.compute_side_features(latest_landmarks["right"], view="right")
-                if feats: features_payload["right"] = feats
+            if now - last_update_time["right"] < 1.5:
+                connected_cameras.append("right")
+                if latest_landmarks["right"]:
+                    active_cameras.append("right")
+                    feats = pose_extractor.compute_side_features(latest_landmarks["right"], view="right")
+                    if feats: features_payload["right"] = feats
 
-            if active_cameras:
-                result = inference_engine.evaluate_posture(active_cameras, features_payload)
+            if connected_cameras:
+                result = inference_engine.evaluate_posture(active_cameras, features_payload, connected_cameras)
                 result['timestamp'] = round(time.time(), 3)
                 await websocket.send_json(result)
             else:
                 # No active cameras, send offline heartbeat
                 await websocket.send_json({
                     "timestamp": round(time.time(), 3),
-                    "overall_quality": "good",
+                    "overall_quality": "standby",
+                    "front_quality": "standby",
+                    "side_quality": "standby",
+                    "front_label": "offline",
+                    "side_label": "offline",
                     "posture_label": "offline",
+                    "active_cameras": [],
                     "feedback": {"message": "Waiting for camera streams...", "alert_level": "INFO"}
                 })
 
