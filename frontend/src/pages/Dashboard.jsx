@@ -130,16 +130,36 @@ export function Dashboard() {
         // Auto-assign laptop built-in camera to Cam 1
         const builtInCam = videoDevices.find(d => {
           const label = (d.label || '').toLowerCase();
-          const isVirtual = label.includes('iriun') || label.includes('droidcam') || label.includes('virtual');
-          return !isVirtual;
-        }) || videoDevices[0];
+          const isVirtual = label.includes('iriun') || label.includes('droid') || label.includes('virtual');
+          return !isVirtual && label.length > 0;
+        }) || videoDevices.find(d => !d.label.toLowerCase().includes('iriun') && !d.label.toLowerCase().includes('droid')) || videoDevices[0];
 
-        // Auto-assign mobile/virtual webcams to Cam 2 & Cam 3
-        const externalCams = videoDevices.filter(d => d.deviceId !== builtInCam.deviceId);
+        // Explicitly find Iriun Webcam 1 (sometimes just named "Iriun Webcam" without a number)
+        const iriun1 = videoDevices.find(d => {
+          const label = (d.label || '').toLowerCase();
+          return label.includes('iriun') && !label.includes('2') && !label.includes('3');
+        });
+        
+        // Explicitly find Iriun Webcam 2
+        const iriun2 = videoDevices.find(d => {
+          const label = (d.label || '').toLowerCase();
+          return label.includes('iriun') && label.includes('2');
+        });
 
-        setCam1DeviceId(builtInCam.deviceId);
-        setCam2DeviceId(externalCams.length > 0 ? externalCams[0].deviceId : '');
-        setCam3DeviceId(externalCams.length > 1 ? externalCams[1].deviceId : '');
+        // Fallback logic for mobile/virtual webcams if Iriun 1/2 are not present
+        const otherExternalCams = videoDevices.filter(d => 
+          d.deviceId !== builtInCam?.deviceId && 
+          d.deviceId !== iriun1?.deviceId && 
+          d.deviceId !== iriun2?.deviceId
+        );
+
+        setCam1DeviceId(builtInCam?.deviceId || '');
+        
+        const c2 = iriun1 ? iriun1.deviceId : (otherExternalCams.length > 0 ? otherExternalCams.shift().deviceId : '');
+        const c3 = iriun2 ? iriun2.deviceId : (otherExternalCams.length > 0 ? otherExternalCams.shift().deviceId : '');
+        
+        setCam2DeviceId(c2);
+        setCam3DeviceId(c3);
       } else {
         setCam1DeviceId('default');
         setCam2DeviceId('');
