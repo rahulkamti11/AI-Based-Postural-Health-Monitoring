@@ -32,6 +32,7 @@ export function Dashboard() {
   const [continuousSittingSeconds, setContinuousSittingSeconds] = useState(0);
   const [consecutiveBadSeconds, setConsecutiveBadSeconds] = useState(0); // for Visual Modal
   const [audioAlertBadSeconds, setAudioAlertBadSeconds] = useState(0); // for Audio Alert separate tracking
+  const idleSecondsRef = useRef(0); // Tracks no_person/offline duration
 
   const [showAudioModal, setShowAudioModal] = useState(false);
   const audioCtxRef = useRef(null);
@@ -201,19 +202,6 @@ export function Dashboard() {
     const unsubscribeMessage = postureSocket.subscribe((data) => {
       setPostureData(data);
       postureDataRef.current = data;
-      if (data.timestamp && data.features_used) {
-        // Flatten the features for the charts and views
-        const flatFeatures = { 
-          ...(data.features_used.front || {}), 
-          ...(data.features_used.left || {}), 
-          ...(data.features_used.right || {}) 
-        };
-        const dataWithFeatures = { ...data, features: flatFeatures };
-        setHistory((prev) => {
-          const updated = [...prev, dataWithFeatures];
-          return updated.slice(-1800); // 5 minutes of data at 6 FPS
-        });
-      }
     });
 
     return () => {
@@ -228,10 +216,32 @@ export function Dashboard() {
     if (!systemActive) return;
 
     const timer = setInterval(() => {
+      const currentPostureData = postureDataRef.current;
+      
+      // Update history array at 1 Hz for the timeline graph (no sliding window limit)
+      if (currentPostureData) {
+        setHistory(prev => [...prev, currentPostureData]);
+      }
+
+      const isStandby = currentPostureData?.overall_quality === 'standby' || currentPostureData?.posture_label === 'offline';
+
+      // Auto-shutdown on 5 mins (300s) of inactivity (no person / offline)
+      if (isStandby) {
+        idleSecondsRef.current += 1;
+        if (idleSecondsRef.current >= 300) {
+          setSystemActive(false);
+          setToastMessage("Monitoring automatically stopped due to 5 minutes of inactivity.");
+          idleSecondsRef.current = 0;
+        }
+        return; // Pause all session tracking while in standby
+      } else {
+        idleSecondsRef.current = 0;
+      }
+
+      // If we reach here, system is actively monitoring someone
       setSessionSeconds(prev => prev + 1);
       setContinuousSittingSeconds(prev => prev + 1);
 
-      const currentPostureData = postureDataRef.current;
       const isBad = currentPostureData?.overall_quality === 'bad';
 
       if (isBad) {
@@ -291,7 +301,8 @@ export function Dashboard() {
   }, [consecutiveBadSeconds, visualAlertEnabled, systemActive]);
 
 
-  const postureQuality = postureData?.overall_quality || 'good';
+  const frontQuality = postureData?.front_quality || 'good';
+  const sideQuality = postureData?.side_quality || 'good';
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans px-4 md:px-8 pb-8 pt-24">
@@ -346,7 +357,7 @@ export function Dashboard() {
             onSelectDevice={setCam2DeviceId}
             onFpsUpdate={setCam2Fps}
             systemActive={systemActive}
-            postureQuality={postureQuality}
+            postureQuality={sideQuality}
             isScanning={isScanning}
           />
 
@@ -360,7 +371,7 @@ export function Dashboard() {
             onSelectDevice={setCam1DeviceId}
             onFpsUpdate={setCam1Fps}
             systemActive={systemActive}
-            postureQuality={postureQuality}
+            postureQuality={frontQuality}
             isScanning={isScanning}
           />
 
@@ -374,13 +385,18 @@ export function Dashboard() {
             onSelectDevice={setCam3DeviceId}
             onFpsUpdate={setCam3Fps}
             systemActive={systemActive}
-            postureQuality={postureQuality}
+            postureQuality={sideQuality}
             isScanning={isScanning}
           />
         </div>
 
         {/* Real-Time Trend Visualization Graph */}
-        <PostureHistoryChart historyData={history} />
+        <PostureHistoryChart 
+          historyData={history} 
+          sessionSeconds={sessionSeconds}
+          goodSeconds={goodSeconds}
+          badSeconds={badSeconds}
+        />
 
         {/* Mobile & USB Setup Guidance Banner */}
         <InfoBanner />
