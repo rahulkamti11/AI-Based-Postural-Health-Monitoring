@@ -1,5 +1,5 @@
 import React from 'react';
-import { PlayCircle, PauseCircle, Volume2, VolumeX, Bell, BellOff, Video, VideoOff, Wifi, WifiOff, BellRing, RefreshCw } from 'lucide-react';
+import { PlayCircle, PauseCircle, Volume2, VolumeX, Bell, BellOff, Video, VideoOff, Wifi, WifiOff, BellRing, RefreshCw, ChevronDown } from 'lucide-react';
 
 export function Header({
   systemActive,
@@ -29,49 +29,57 @@ export function Header({
     setIsHovered(false);
   };
 
+  const [isAlertMenuOpen, setIsAlertMenuOpen] = React.useState(false);
+
   return (
     <nav className="fixed top-0 left-0 right-0 h-16 bg-white border-b border-slate-200 shadow-sm z-50 flex items-center justify-between px-6">
       
       {/* Left Area - Alert Controls */}
-      <div 
-        className="relative flex items-center bg-slate-50 border border-slate-200 rounded-lg p-1 cursor-help"
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-      >
-        
-        {/* Hover Tooltip */}
-        <div className={`absolute top-full left-0 mt-3 w-72 bg-slate-800 text-white text-xs p-3 rounded-lg shadow-xl transition-opacity duration-300 pointer-events-none z-50 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
-          <p className="font-bold text-sm mb-1 text-slate-100">Alert Controls</p>
-          <ul className="space-y-1 text-slate-300">
-            <li><strong className="text-white">Audio:</strong> Plays a chime sound when bad posture is maintained continuously for &gt; 60 seconds.</li>
-            <li><strong className="text-white">Visual:</strong> Displays a warning popup modal when bad posture is maintained for &gt; 30 seconds.</li>
-          </ul>
-        </div>
-
-        <div className="px-3 py-1 flex items-center space-x-1.5 border-r border-slate-300">
-          <BellRing size={14} className="text-slate-500" />
-          <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Alerts</span>
-        </div>
-        
-        <button
-          className={`flex items-center space-x-1.5 px-3 py-1.5 ml-1 rounded-md text-xs font-semibold transition-colors ${
-            audioAlertEnabled ? 'bg-slate-800 text-white shadow-sm' : 'bg-transparent text-slate-500 hover:bg-slate-200'
+      <div className="relative">
+        <button 
+          onClick={() => setIsAlertMenuOpen(!isAlertMenuOpen)}
+          className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all border ${
+            (audioAlertEnabled || visualAlertEnabled) 
+              ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100' 
+              : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'
           }`}
-          onClick={onToggleAudioAlert}
         >
-          {audioAlertEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
-          <span>Audio</span>
+          <BellRing size={16} />
+          <span>Alert Settings</span>
+          <ChevronDown size={14} className={`transition-transform ${isAlertMenuOpen ? 'rotate-180' : ''}`} />
         </button>
 
-        <button
-          className={`flex items-center space-x-1.5 px-3 py-1.5 ml-1 rounded-md text-xs font-semibold transition-colors ${
-            visualAlertEnabled ? 'bg-slate-800 text-white shadow-sm' : 'bg-transparent text-slate-500 hover:bg-slate-200'
-          }`}
-          onClick={onToggleVisualAlert}
-        >
-          {visualAlertEnabled ? <Bell size={14} /> : <BellOff size={14} />}
-          <span>Visual</span>
-        </button>
+        {isAlertMenuOpen && (
+          <div className="absolute top-full left-0 mt-2 w-72 bg-white border border-slate-200 shadow-2xl rounded-xl z-50 p-4">
+            <h4 className="text-sm font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100">Notification Preferences</h4>
+            
+            <div className="flex items-center justify-between mb-3 p-2 rounded-lg hover:bg-slate-50 transition-colors">
+               <div className="flex flex-col">
+                  <span className="text-sm font-bold text-slate-700 flex items-center gap-1.5"><Volume2 size={14}/> Audio Alarm</span>
+                  <span className="text-xs text-slate-400">Plays chime after 60s of bad posture</span>
+               </div>
+               <button 
+                 onClick={onToggleAudioAlert}
+                 className={`w-11 h-6 rounded-full relative transition-colors ${audioAlertEnabled ? 'bg-indigo-600' : 'bg-slate-300'}`}
+               >
+                 <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform ${audioAlertEnabled ? 'left-6' : 'left-1'}`} />
+               </button>
+            </div>
+
+            <div className="flex items-center justify-between mb-4 p-2 rounded-lg hover:bg-slate-50 transition-colors">
+               <div className="flex flex-col">
+                  <span className="text-sm font-bold text-slate-700 flex items-center gap-1.5"><Bell size={14}/> Visual Popup</span>
+                  <span className="text-xs text-slate-400">Shows warning after 30s of bad posture</span>
+               </div>
+               <button 
+                 onClick={onToggleVisualAlert}
+                 className={`w-11 h-6 rounded-full relative transition-colors ${visualAlertEnabled ? 'bg-indigo-600' : 'bg-slate-300'}`}
+               >
+                 <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform ${visualAlertEnabled ? 'left-6' : 'left-1'}`} />
+               </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Right Area - System Controls */}

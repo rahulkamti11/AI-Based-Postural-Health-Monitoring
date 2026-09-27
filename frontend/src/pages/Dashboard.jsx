@@ -289,6 +289,7 @@ export function Dashboard() {
   useEffect(() => {
     if (audioAlertEnabled && systemActive && audioAlertBadSeconds >= 60) {
       setShowAudioModal(true);
+      setShowBadPostureModal(true);
       startAudioAlarm();
     }
   }, [audioAlertBadSeconds, audioAlertEnabled, systemActive, startAudioAlarm]);
@@ -401,44 +402,27 @@ export function Dashboard() {
         {/* Mobile & USB Setup Guidance Banner */}
         <InfoBanner />
 
-        {/* Sustained Bad Posture (>30s) Warning Modal Popup */}
+        {/* Sustained Bad Posture Warning Modal Popup (Combined Visual & Audio) */}
         <BadPostureModal
           isOpen={showBadPostureModal}
           onClose={() => {
             setShowBadPostureModal(false);
-            setConsecutiveBadSeconds(0); // Reset visual alert timer without affecting session time
+            setConsecutiveBadSeconds(0);
+            if (showAudioModal) {
+              setShowAudioModal(false);
+              stopAudioAlarm();
+              setAudioAlertBadSeconds(0);
+            }
           }}
           postureLabel={postureData?.posture_label}
           consecutiveBadSeconds={consecutiveBadSeconds}
+          isAudioPlaying={showAudioModal}
+          onSilenceAudio={() => {
+            setShowAudioModal(false);
+            stopAudioAlarm();
+            setAudioAlertBadSeconds(0);
+          }}
         />
-
-        {/* Audio Alert Popup UI */}
-        {showAudioModal && (
-          <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[100] bg-rose-600 text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-6 animate-bounce">
-            <div>
-              <h4 className="font-bold text-lg">⚠️ Audio Alert: Bad Posture!</h4>
-              <p className="text-sm opacity-90">Please correct your posture immediately.</p>
-            </div>
-            <div className="flex gap-2">
-              <button 
-                onClick={() => stopAudioAlarm()} 
-                className="px-4 py-2 bg-white/20 hover:bg-white/30 transition-colors rounded-lg text-sm font-bold"
-              >
-                Silence
-              </button>
-              <button 
-                onClick={() => {
-                  setShowAudioModal(false);
-                  stopAudioAlarm();
-                  setAudioAlertBadSeconds(0); // Reset audio timer to trigger again after 60s
-                }} 
-                className="px-4 py-2 bg-white text-rose-600 hover:bg-rose-50 transition-colors rounded-lg text-sm font-bold"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        )}
 
         <footer className="text-center text-xs text-slate-400 mt-8 border-t border-slate-200 pt-4">
           <p>AI Posture Health Monitoring System • Real-Time Vision & Feature Fusion Platform • Phase 1 Scope</p>

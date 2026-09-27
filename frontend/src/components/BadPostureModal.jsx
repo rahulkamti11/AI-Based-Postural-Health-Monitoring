@@ -1,12 +1,24 @@
 import React from 'react';
-import { AlertOctagon, X, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { AlertOctagon, X, CheckCircle2, ShieldAlert, Volume2, BellRing } from 'lucide-react';
 
 export function BadPostureModal({
   isOpen,
   onClose,
   postureLabel = 'thoracic_kyphotic_slouch',
-  consecutiveBadSeconds = 30
+  consecutiveBadSeconds = 30,
+  isAudioPlaying = false,
+  onSilenceAudio
 }) {
+  const [audioState, setAudioState] = React.useState('none'); // 'none' | 'playing' | 'silenced'
+
+  React.useEffect(() => {
+     if (!isOpen) {
+        setAudioState('none');
+     } else {
+        if (isAudioPlaying) setAudioState('playing');
+     }
+  }, [isOpen, isAudioPlaying]);
+
   if (!isOpen) return null;
 
   const formatLabel = (lbl) => {
@@ -16,7 +28,7 @@ export function BadPostureModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
-      <div className="clean-card max-w-md w-full p-6 border-rose-300 shadow-2xl relative bg-white">
+      <div className="clean-card max-w-lg w-full p-8 border-rose-300 shadow-2xl relative bg-white">
         <button
           onClick={onClose}
           className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1 rounded-lg transition-colors"
@@ -43,6 +55,32 @@ export function BadPostureModal({
             You have been sitting in bad posture for <strong className="underline">{consecutiveBadSeconds} seconds continuously</strong>. Prolonged misalignment increases spinal strain and risks long-term back/neck pain.
           </p>
         </div>
+
+        {audioState !== 'none' && (
+          <div className={`border rounded-xl p-3 mb-4 flex flex-col gap-2 shadow-inner transition-colors duration-300 ${
+            audioState === 'playing' 
+              ? 'bg-rose-600 border-rose-700 text-white animate-pulse' 
+              : 'bg-slate-100 border-slate-300 text-slate-500'
+          }`}>
+             <div className="flex items-center gap-2">
+                 <BellRing size={18} className={audioState === 'silenced' ? 'opacity-50' : ''} />
+                 <span className="text-sm font-bold">
+                   {audioState === 'playing' ? 'Audio Alarm is Ringing!' : 'Audio Alarm Silenced'}
+                 </span>
+             </div>
+             {audioState === 'playing' && (
+               <button 
+                  onClick={() => {
+                    setAudioState('silenced');
+                    onSilenceAudio();
+                  }} 
+                  className="w-full py-1.5 bg-white text-rose-700 text-xs font-extrabold rounded-lg hover:bg-rose-50 transition-colors shadow-sm"
+               >
+                   Silence Alarm
+               </button>
+             )}
+          </div>
+        )}
 
         <div className="space-y-2 mb-6">
           <h4 className="text-xs font-extrabold text-slate-500 uppercase tracking-wider">Recommended Posture Corrections</h4>
