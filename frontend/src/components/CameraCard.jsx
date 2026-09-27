@@ -333,7 +333,7 @@ export function CameraCard({
               className="device-select"
               value={selectedDeviceId || ''}
               onChange={(e) => onSelectDevice(e.target.value)}
-              disabled={!systemActive || !isPoweredOn}
+              disabled={!isPoweredOn}
             >
               {!selectedDeviceId || availableDevices.length === 0 ? (
                 <option value="">No camera selected / Offline</option>
