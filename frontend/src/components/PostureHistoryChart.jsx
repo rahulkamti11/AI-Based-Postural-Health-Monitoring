@@ -1,7 +1,14 @@
 import React, { useMemo, useState, useRef } from 'react';
 import { Activity, Clock, Download, ChevronDown } from 'lucide-react';
 
-export function PostureHistoryChart({ historyData = [], sessionSeconds = 0, goodSeconds = 0, badSeconds = 0 }) {
+export function PostureHistoryChart({ 
+  historyData = [], 
+  sessionSeconds = 0, 
+  goodSeconds = 0, 
+  badSeconds = 0,
+  totalActiveSeconds = 0,
+  undetectedSeconds = 0
+}) {
   const [hoveredSeg, setHoveredSeg] = useState(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const timelineRef = useRef(null);
@@ -74,20 +81,31 @@ export function PostureHistoryChart({ historyData = [], sessionSeconds = 0, good
       
       if (format === 'csv') {
         mimeType = "text/csv";
-        content = "Start Time,End Time,Duration (s),Overall Status,Front View,Side View\n";
+        content = "POSTURE HEALTH SESSION REPORT\n\n";
+        content += `Date:,${new Date().toLocaleDateString()}\n`;
+        content += `Session Duration:,${formatTime(totalActiveSeconds)}\n`;
+        content += `Undetected Time:,${formatTime(undetectedSeconds)}\n`;
+        content += `Detected Time:,${formatTime(sessionSeconds)}\n`;
+        content += `Good Posture Time:,${formatTime(goodSeconds)}\n`;
+        content += `Bad Posture Time:,${formatTime(badSeconds)}\n\n`;
+        content += "TIMELINE BREAKDOWN\n";
+        content += "Start Time,End Time,Duration (s),Overall Status,Front View,Side View\n";
         segments.forEach((seg) => {
             const duration = Math.max(seg.endIdx - seg.startIdx + 1, 1);
             let overall = seg.status === 'green' ? 'GOOD' : (seg.status === 'red' ? 'BAD' : 'STANDBY');
             let front = seg.status === 'gray' ? 'N/A' : seg.frontLabel;
             let side = seg.status === 'gray' ? 'N/A' : seg.sideLabel;
-            content += `"${seg.timeString}","${seg.endTimeString}",${duration},"${overall}","${front}","${side}"\n`;
+            // Wrapping time in brackets to force Excel to treat it as text instead of throwing #########
+            content += `"[${seg.timeString}]","[${seg.endTimeString}]",${duration},"${overall}","${front}","${side}"\n`;
         });
       } else {
         content = "========================================\n";
         content += "       POSTURE HEALTH SESSION REPORT    \n";
         content += "========================================\n\n";
         content += `Date: ${new Date().toLocaleDateString()}\n\n`;
-        content += `Total Session Time: ${formatTime(sessionSeconds)}\n`;
+        content += `Session Duration: ${formatTime(totalActiveSeconds)}\n`;
+        content += `Undetected Time: ${formatTime(undetectedSeconds)}\n`;
+        content += `Detected Time: ${formatTime(sessionSeconds)}\n`;
         content += `Good Posture Time: ${formatTime(goodSeconds)}\n`;
         content += `Bad Posture Time: ${formatTime(badSeconds)}\n\n`;
         
@@ -155,19 +173,27 @@ export function PostureHistoryChart({ historyData = [], sessionSeconds = 0, good
       
       {/* Session Stats Banner */}
       <div className="flex bg-slate-50 rounded-xl border border-slate-200 overflow-hidden shadow-sm mb-8">
-        <div className="flex-1 text-center py-3 px-6 border-r border-slate-200">
-             <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Total Time</p>
-             <p className="text-2xl font-black text-slate-800">{formatTime(sessionSeconds)}</p>
-          </div>
-          <div className="flex-1 text-center py-3 px-6 border-r border-slate-200">
-             <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Correct Pose</p>
-             <p className="text-2xl font-black text-emerald-600">{formatTime(goodSeconds)}</p>
-          </div>
-          <div className="flex-1 text-center py-3 px-6">
-             <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Bad Pose</p>
-             <p className="text-2xl font-black text-rose-600">{formatTime(badSeconds)}</p>
-          </div>
+        <div className="flex-1 text-center py-3 px-2 border-r border-slate-200">
+             <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Session Duration</p>
+             <p className="text-xl font-black text-slate-800">{formatTime(totalActiveSeconds)}</p>
         </div>
+        <div className="flex-1 text-center py-3 px-2 border-r border-slate-200">
+             <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Undetected</p>
+             <p className="text-xl font-black text-slate-500">{formatTime(undetectedSeconds)}</p>
+        </div>
+        <div className="flex-1 text-center py-3 px-2 border-r border-slate-200">
+             <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Detected</p>
+             <p className="text-xl font-black text-indigo-600">{formatTime(sessionSeconds)}</p>
+        </div>
+        <div className="flex-1 text-center py-3 px-2 border-r border-slate-200">
+             <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Good Pose</p>
+             <p className="text-xl font-black text-emerald-600">{formatTime(goodSeconds)}</p>
+        </div>
+        <div className="flex-1 text-center py-3 px-2">
+             <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Bad Pose</p>
+             <p className="text-xl font-black text-rose-600">{formatTime(badSeconds)}</p>
+        </div>
+      </div>
 
       {/* 1D Timeline Bar */}
       <div 

@@ -22,7 +22,9 @@ export function Dashboard() {
   const [showBadPostureModal, setShowBadPostureModal] = useState(false);
 
   // Session Analytics State
-  const [sessionSeconds, setSessionSeconds] = useState(0);
+  const [totalActiveSeconds, setTotalActiveSeconds] = useState(0);
+  const [undetectedSeconds, setUndetectedSeconds] = useState(0);
+  const [sessionSeconds, setSessionSeconds] = useState(0); // This represents 'Detected' time
   const [goodSeconds, setGoodSeconds] = useState(0);
   const [badSeconds, setBadSeconds] = useState(0);
   const [badPostureInstances, setBadPostureInstances] = useState(0);
@@ -225,6 +227,8 @@ export function Dashboard() {
 
       const isStandby = currentPostureData?.overall_quality === 'standby' || currentPostureData?.posture_label === 'offline';
 
+        setTotalActiveSeconds(prev => prev + 1);
+
       // Auto-shutdown on 5 mins (300s) of inactivity (no person / offline)
       if (isStandby) {
         idleSecondsRef.current += 1;
@@ -395,6 +399,8 @@ export function Dashboard() {
         <PostureHistoryChart 
           historyData={history} 
           sessionSeconds={sessionSeconds}
+          totalActiveSeconds={totalActiveSeconds}
+          undetectedSeconds={undetectedSeconds}
           goodSeconds={goodSeconds}
           badSeconds={badSeconds}
         />
