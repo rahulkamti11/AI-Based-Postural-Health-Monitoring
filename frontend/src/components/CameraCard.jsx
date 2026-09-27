@@ -260,6 +260,21 @@ export function CameraCard({
     if (results && results.poseLandmarks) {
       const landmarks = results.poseLandmarks;
 
+      // Filter false positives (e.g. Cat Screen) using average visibility of key upper-body landmarks
+      const keyIndices = [0, 11, 12, 23, 24]; // Nose, Shoulders, Hips
+      let totalVis = 0;
+      keyIndices.forEach(idx => {
+        totalVis += (landmarks[idx]?.visibility || 0);
+      });
+      const avgVis = totalVis / keyIndices.length;
+
+      if (avgVis < 0.5) {
+        // Person not detected with enough confidence
+        postureSocket.sendLandmarks(null, camId === 'cam1' ? 'front' : (camId === 'cam2' ? 'left' : 'right'));
+        ctx.restore();
+        return;
+      }
+
       const landmarksDict = {};
       landmarks.forEach((lm, idx) => {
         const name = LANDMARK_NAMES[idx] || `lm_${idx}`;
@@ -312,6 +327,9 @@ export function CameraCard({
           }
         }
       }
+    } else {
+      // No person detected at all
+      postureSocket.sendLandmarks(null, camId === 'cam1' ? 'front' : (camId === 'cam2' ? 'left' : 'right'));
     }
 
     ctx.restore();
