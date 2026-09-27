@@ -30,7 +30,12 @@ export function Dashboard() {
 
   // Continuous tracking timers
   const [continuousSittingSeconds, setContinuousSittingSeconds] = useState(0);
-  const [consecutiveBadSeconds, setConsecutiveBadSeconds] = useState(0);
+  const [consecutiveBadSeconds, setConsecutiveBadSeconds] = useState(0); // for Visual Modal
+  const [audioAlertBadSeconds, setAudioAlertBadSeconds] = useState(0); // for Audio Alert separate tracking
+
+  const [showAudioModal, setShowAudioModal] = useState(false);
+  const audioCtxRef = useRef(null);
+  const beepIntervalRef = useRef(null);
 
   const [cam1DeviceId, setCam1DeviceId] = useState('');
   const [cam2DeviceId, setCam2DeviceId] = useState('');
@@ -41,26 +46,47 @@ export function Dashboard() {
   const [cam3Fps, setCam3Fps] = useState(0);
 
   const lastBadStateRef = useRef(false);
+  const consecutiveGoodSecondsRef = useRef(0);
   const lastAudioTriggerRef = useRef(0);
 
-  // Web Audio API chime generator for 60s continuous sitting alert
-  const playChimeSound = useCallback(() => {
-    try {
+  // Initialize Audio Context on user gesture to bypass browser autoplay block
+  useEffect(() => {
+    if (systemActive && !audioCtxRef.current) {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5 note
-      gain.gain.setValueAtTime(0.15, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
+      if (AudioCtx) audioCtxRef.current = new AudioCtx();
+    }
+  }, [systemActive]);
+
+  const playBeep = useCallback(() => {
+    if (!audioCtxRef.current) return;
+    if (audioCtxRef.current.state === 'suspended') audioCtxRef.current.resume();
+    
+    try {
+      const osc = audioCtxRef.current.createOscillator();
+      const gain = audioCtxRef.current.createGain();
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(audioCtxRef.current.destination);
+      osc.type = 'square';
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.1, audioCtxRef.current.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtxRef.current.currentTime + 0.5);
       osc.start();
-      osc.stop(ctx.currentTime + 0.8);
+      osc.stop(audioCtxRef.current.currentTime + 0.5);
     } catch (e) {
-      console.warn("Audio chime play error:", e);
+      console.warn("Audio beep failed:", e);
+    }
+  }, []);
+
+  const startAudioAlarm = useCallback(() => {
+    if (beepIntervalRef.current) return; // already playing
+    playBeep(); // play first beep immediately
+    beepIntervalRef.current = setInterval(playBeep, 1000); // loop every second
+  }, [playBeep]);
+
+  const stopAudioAlarm = useCallback(() => {
+    if (beepIntervalRef.current) {
+      clearInterval(beepIntervalRef.current);
+      beepIntervalRef.current = null;
     }
   }, []);
 
@@ -145,6 +171,8 @@ export function Dashboard() {
     }
   }, [systemActive]);
 
+  const postureDataRef = useRef(null);
+
   useEffect(() => {
     const unsubscribeStatus = postureSocket.subscribeStatus((status) => {
       setIsConnected(status === 'connected');
@@ -152,6 +180,7 @@ export function Dashboard() {
 
     const unsubscribeMessage = postureSocket.subscribe((data) => {
       setPostureData(data);
+      postureDataRef.current = data;
       if (data.timestamp && data.features_used) {
         // Flatten the features for the charts and views
         const flatFeatures = { 
@@ -162,7 +191,7 @@ export function Dashboard() {
         const dataWithFeatures = { ...data, features: flatFeatures };
         setHistory((prev) => {
           const updated = [...prev, dataWithFeatures];
-          return updated.slice(-30);
+          return updated.slice(-1800); // 5 minutes of data at 6 FPS
         });
       }
     });
@@ -182,13 +211,16 @@ export function Dashboard() {
       setSessionSeconds(prev => prev + 1);
       setContinuousSittingSeconds(prev => prev + 1);
 
-      const isBad = postureData?.overall_quality === 'bad';
+      const currentPostureData = postureDataRef.current;
+      const isBad = currentPostureData?.overall_quality === 'bad';
 
       if (isBad) {
         setBadSeconds(prev => prev + 1);
         setConsecutiveBadSeconds(prev => prev + 1);
+        setAudioAlertBadSeconds(prev => prev + 1);
+        consecutiveGoodSecondsRef.current = 0; // Reset good streak
 
-        const currentLabel = postureData?.posture_label || 'unknown';
+        const currentLabel = currentPostureData?.posture_label || 'unknown';
         setLabelCounts(prev => ({
           ...prev,
           [currentLabel]: (prev[currentLabel] || 0) + 1
@@ -200,23 +232,36 @@ export function Dashboard() {
         }
       } else {
         setGoodSeconds(prev => prev + 1);
-        setConsecutiveBadSeconds(0);
-        lastBadStateRef.current = false;
+        consecutiveGoodSecondsRef.current += 1; // Increment good streak
+        
+        // Hysteresis: Only reset bad clocks if good posture is maintained for 3 continuous seconds
+        if (consecutiveGoodSecondsRef.current >= 3) {
+          setConsecutiveBadSeconds(0);
+          setAudioAlertBadSeconds(0);
+          lastBadStateRef.current = false;
+          
+          setShowAudioModal(false);
+          setShowBadPostureModal(false);
+        }
       }
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [systemActive, postureData]);
+  }, [systemActive]);
 
   // Audio alert check: Consecutive bad posture > 60 seconds
   useEffect(() => {
-    if (audioAlertEnabled && systemActive && consecutiveBadSeconds > 60) {
-      if (Date.now() - lastAudioTriggerRef.current > 60000) {
-        playChimeSound();
-        lastAudioTriggerRef.current = Date.now();
-      }
+    if (!showAudioModal) {
+      stopAudioAlarm(); // guarantee off if not shown
     }
-  }, [consecutiveBadSeconds, audioAlertEnabled, systemActive, playChimeSound]);
+  }, [showAudioModal, stopAudioAlarm]);
+
+  useEffect(() => {
+    if (audioAlertEnabled && systemActive && audioAlertBadSeconds >= 60) {
+      setShowAudioModal(true);
+      startAudioAlarm();
+    }
+  }, [audioAlertBadSeconds, audioAlertEnabled, systemActive, startAudioAlarm]);
 
   // Visual modal alert check: Consecutive bad posture > 30 seconds
   useEffect(() => {
@@ -323,10 +368,41 @@ export function Dashboard() {
         {/* Sustained Bad Posture (>30s) Warning Modal Popup */}
         <BadPostureModal
           isOpen={showBadPostureModal}
-          onClose={() => setShowBadPostureModal(false)}
+          onClose={() => {
+            setShowBadPostureModal(false);
+            setConsecutiveBadSeconds(0); // Reset visual alert timer without affecting session time
+          }}
           postureLabel={postureData?.posture_label}
           consecutiveBadSeconds={consecutiveBadSeconds}
         />
+
+        {/* Audio Alert Popup UI */}
+        {showAudioModal && (
+          <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[100] bg-rose-600 text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-6 animate-bounce">
+            <div>
+              <h4 className="font-bold text-lg">⚠️ Audio Alert: Bad Posture!</h4>
+              <p className="text-sm opacity-90">Please correct your posture immediately.</p>
+            </div>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => stopAudioAlarm()} 
+                className="px-4 py-2 bg-white/20 hover:bg-white/30 transition-colors rounded-lg text-sm font-bold"
+              >
+                Silence
+              </button>
+              <button 
+                onClick={() => {
+                  setShowAudioModal(false);
+                  stopAudioAlarm();
+                  setAudioAlertBadSeconds(0); // Reset audio timer to trigger again after 60s
+                }} 
+                className="px-4 py-2 bg-white text-rose-600 hover:bg-rose-50 transition-colors rounded-lg text-sm font-bold"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
 
         <footer className="text-center text-xs text-slate-400 mt-8 border-t border-slate-200 pt-4">
           <p>AI Posture Health Monitoring System • Real-Time Vision & Feature Fusion Platform • Phase 1 Scope</p>
