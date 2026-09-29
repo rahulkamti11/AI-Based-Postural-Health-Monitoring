@@ -8,6 +8,8 @@ import asyncio
 import sys
 import os
 import json
+import statistics
+from collections import deque
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -71,6 +73,9 @@ async def websocket_posture_endpoint(websocket: WebSocket):
         "right": 0
     }
 
+    # Smoothing buffer (7 frames ~ 1 second)
+    history_buffer = deque(maxlen=7)
+
     async def receive_client_keypoints():
         try:
             while True:
@@ -122,10 +127,29 @@ async def websocket_posture_endpoint(websocket: WebSocket):
                     if feats: features_payload["right"] = feats
 
             if connected_cameras:
-                result = inference_engine.evaluate_posture(active_cameras, features_payload, connected_cameras)
-                result['timestamp'] = round(time.time(), 3)
-                await websocket.send_json(result)
+                raw_result = inference_engine.evaluate_posture(active_cameras, features_payload, connected_cameras)
+                history_buffer.append(raw_result)
+                
+                # Debounce by taking the mode (majority vote) of the posture_label
+                labels = [r['posture_label'] for r in history_buffer]
+                try:
+                    smoothed_label = statistics.mode(labels)
+                except statistics.StatisticsError:
+                    smoothed_label = raw_result['posture_label']
+                
+                # Pick the most recent result that matches the smoothed label
+                smoothed_result = raw_result
+                for r in reversed(history_buffer):
+                    if r['posture_label'] == smoothed_label:
+                        smoothed_result = r
+                        break
+                        
+                final_payload = smoothed_result.copy()
+                final_payload['timestamp'] = round(time.time(), 3)
+                
+                await websocket.send_json(final_payload)
             else:
+                history_buffer.clear()
                 # No active cameras, send offline heartbeat
                 await websocket.send_json({
                     "timestamp": round(time.time(), 3),

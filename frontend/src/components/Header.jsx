@@ -8,6 +8,10 @@ export function Header({
   onToggleAudioAlert,
   visualAlertEnabled,
   onToggleVisualAlert,
+  visualThreshold,
+  onVisualThresholdChange,
+  audioThreshold,
+  onAudioThresholdChange,
   showVideoFeeds,
   onToggleVideoFeeds,
   isConnected,
@@ -56,7 +60,18 @@ export function Header({
             <div className="flex items-center justify-between mb-3 p-2 rounded-lg hover:bg-slate-50 transition-colors">
                <div className="flex flex-col">
                   <span className="text-sm font-bold text-slate-700 flex items-center gap-1.5"><Volume2 size={14}/> Audio Alarm</span>
-                  <span className="text-xs text-slate-400">Plays chime after 60s of bad posture</span>
+                  <select 
+                    value={audioThreshold} 
+                    onChange={(e) => onAudioThresholdChange(Number(e.target.value))}
+                    className="mt-1 text-xs text-slate-600 bg-white border border-slate-200 rounded px-1 py-0.5 outline-none cursor-pointer hover:border-indigo-300"
+                  >
+                    <option value={15}>After 15s</option>
+                    <option value={30}>After 30s</option>
+                    <option value={60}>After 1m</option>
+                    <option value={120}>After 2m</option>
+                    <option value={180}>After 3m</option>
+                    <option value={300}>After 5m</option>
+                  </select>
                </div>
                <button 
                  onClick={onToggleAudioAlert}
@@ -69,7 +84,18 @@ export function Header({
             <div className="flex items-center justify-between mb-4 p-2 rounded-lg hover:bg-slate-50 transition-colors">
                <div className="flex flex-col">
                   <span className="text-sm font-bold text-slate-700 flex items-center gap-1.5"><Bell size={14}/> Visual Popup</span>
-                  <span className="text-xs text-slate-400">Shows warning after 30s of bad posture</span>
+                  <select 
+                    value={visualThreshold} 
+                    onChange={(e) => onVisualThresholdChange(Number(e.target.value))}
+                    className="mt-1 text-xs text-slate-600 bg-white border border-slate-200 rounded px-1 py-0.5 outline-none cursor-pointer hover:border-indigo-300"
+                  >
+                    <option value={15}>After 15s</option>
+                    <option value={30}>After 30s</option>
+                    <option value={60}>After 1m</option>
+                    <option value={120}>After 2m</option>
+                    <option value={180}>After 3m</option>
+                    <option value={300}>After 5m</option>
+                  </select>
                </div>
                <button 
                  onClick={onToggleVisualAlert}

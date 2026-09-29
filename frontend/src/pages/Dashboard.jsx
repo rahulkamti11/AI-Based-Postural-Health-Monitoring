@@ -18,6 +18,22 @@ export function Dashboard() {
   // Togglable alert options
   const [audioAlertEnabled, setAudioAlertEnabled] = useState(true);
   const [visualAlertEnabled, setVisualAlertEnabled] = useState(true);
+  
+  // Custom thresholds (persisted in localStorage)
+  const [visualThreshold, setVisualThreshold] = useState(() => {
+    return parseInt(localStorage.getItem('visualThreshold')) || 30;
+  });
+  const [audioThreshold, setAudioThreshold] = useState(() => {
+    return parseInt(localStorage.getItem('audioThreshold')) || 60;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('visualThreshold', visualThreshold);
+  }, [visualThreshold]);
+
+  useEffect(() => {
+    localStorage.setItem('audioThreshold', audioThreshold);
+  }, [audioThreshold]);
   const [showVideoFeeds, setShowVideoFeeds] = useState(true);
   const [showBadPostureModal, setShowBadPostureModal] = useState(false);
 
@@ -291,19 +307,19 @@ export function Dashboard() {
   }, [showAudioModal, stopAudioAlarm]);
 
   useEffect(() => {
-    if (audioAlertEnabled && systemActive && audioAlertBadSeconds >= 60) {
+    if (audioAlertEnabled && systemActive && audioAlertBadSeconds >= audioThreshold) {
       setShowAudioModal(true);
       setShowBadPostureModal(true);
       startAudioAlarm();
     }
-  }, [audioAlertBadSeconds, audioAlertEnabled, systemActive, startAudioAlarm]);
+  }, [audioAlertBadSeconds, audioAlertEnabled, systemActive, startAudioAlarm, audioThreshold]);
 
   // Visual modal alert check: Consecutive bad posture > 30 seconds
   useEffect(() => {
-    if (visualAlertEnabled && systemActive && consecutiveBadSeconds >= 30) {
+    if (visualAlertEnabled && systemActive && consecutiveBadSeconds >= visualThreshold) {
       setShowBadPostureModal(true);
     }
-  }, [consecutiveBadSeconds, visualAlertEnabled, systemActive]);
+  }, [consecutiveBadSeconds, visualAlertEnabled, systemActive, visualThreshold]);
 
 
   const frontQuality = postureData?.front_quality || 'good';
