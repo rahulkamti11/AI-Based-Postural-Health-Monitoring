@@ -247,6 +247,7 @@ export function Dashboard() {
 
       // Auto-shutdown on 5 mins (300s) of inactivity (no person / offline)
       if (isStandby) {
+        setUndetectedSeconds(prev => prev + 1);
         idleSecondsRef.current += 1;
         if (idleSecondsRef.current >= 300) {
           setSystemActive(false);
@@ -336,6 +337,10 @@ export function Dashboard() {
           onToggleAudioAlert={() => setAudioAlertEnabled(prev => !prev)}
           visualAlertEnabled={visualAlertEnabled}
           onToggleVisualAlert={() => setVisualAlertEnabled(prev => !prev)}
+            visualThreshold={visualThreshold}
+            onVisualThresholdChange={setVisualThreshold}
+            audioThreshold={audioThreshold}
+            onAudioThresholdChange={setAudioThreshold}
           showVideoFeeds={showVideoFeeds}
           onToggleVideoFeeds={() => setShowVideoFeeds(prev => !prev)}
           isConnected={isConnected}
