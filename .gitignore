@@ -31,3 +31,9 @@ Thumbs.db
 
 Untracked
 graphify-out
+ml_output*.txt
+ml-training/results/
+scratch/
+*.tmp
+*.bak
+
