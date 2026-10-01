@@ -19,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.camera.availability import detect_available_cameras
 from app.pose.mediapipe_extractor import MediaPipePoseExtractor
 from app.inference.binary_logic import PostureModelInference
+from app.schemas.posture_schema import LandmarksPayload
 
 app = FastAPI(
     title="AI Sitting Posture Detection API",
@@ -81,15 +82,21 @@ async def websocket_posture_endpoint(websocket: WebSocket):
             while True:
                 data_text = await websocket.receive_text()
                 data = json.loads(data_text)
-                if data.get('type') == 'landmarks' and 'landmarks' in data and 'camera_id' in data:
-                    cam_id = data['camera_id']
-                    if cam_id in latest_landmarks:
-                        latest_landmarks[cam_id] = data['landmarks']
-                        last_update_time[cam_id] = time.time()
+                try:
+                    payload = LandmarksPayload.model_validate(data)
+                    cam_id = payload.camera_id
+                    now_ts = time.time()
+                    # Rate limit: allow at most 15 messages/sec per camera stream
+                    if now_ts - last_update_time.get(cam_id, 0) >= 0.05:
+                        latest_landmarks[cam_id] = payload.landmarks
+                        last_update_time[cam_id] = now_ts
+                except Exception as val_err:
+                    print(f"[WebSocket Payload Warning] Invalid payload discarded: {val_err}")
         except WebSocketDisconnect:
             pass
         except Exception as e:
             print(f"Client listener exception: {e}")
+
 
     listen_task = asyncio.create_task(receive_client_keypoints())
 
