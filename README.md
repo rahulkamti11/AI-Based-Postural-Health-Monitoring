@@ -22,17 +22,21 @@ To solve this, the pipeline is divided into camera-specific independent expert m
    - **Target Labels:** `forwardHead` (Text Neck), `slouch` (Kyphosis), `slidingDown` (Posterior Tilt) vs `normal`.
 
 **Rule Engine Coordination (Backend):**
-The backend aggregates available data streams. If multiple cameras are active, it calculates features for each and runs respective models. If any camera detects a defect, an overall `bad` quality alert is triggered. If only one camera is connected (e.g., just a laptop webcam), it gracefully falls back to monitoring only the defects visible to that single camera.
+The backend aggregates available data streams. If multiple cameras are active, it calculates canonical features for each and runs respective models. If any camera detects a defect, an overall `bad` quality alert is triggered. If only one camera is connected (e.g., just a laptop webcam), it gracefully falls back to monitoring only the defects visible to that single camera.
+
+> **Architecture Clarification**: **MediaPipe Pose Lite runs strictly in the browser** on client video streams via WebAssembly / WebGL, guaranteeing that raw video never leaves the user's device. The browser streams 33 lightweight pose landmark coordinates over WebSocket (`/ws/posture`). The backend's `canonical_features.py` and `mediapipe_extractor.py` compute biomechanical geometric features directly from these streamed keypoints; the backend does not process raw video frames.
 
 ---
 
 ## 📊 Machine Learning Benchmarks & Validation
-Models were trained using Python `scikit-learn` on engineered numerical clinical angles (e.g. CVA, Torso Lean, Shoulder Tilt) derived from a web-curated 240-image multi-angle dataset.
+Models were evaluated using **Strict Subject-Independent Testing** on holdout unseen subjects (`subject09`, `subject10`) and verified across all 10 subjects using 5-Fold `GroupKFold` cross-validation:
 
-| Classifier Model | Camera Target | Validation Accuracy | Inference Mechanism |
-|---|---|---|---|
-| **Random Forest** | **Front Camera** | **100.00%** | `asymmetricalLean` vs `normal` |
-| **Random Forest** | **Side Camera(s)** | **81.25%** | `forwardHead`, `slouch`, `slidingDown` vs `normal` |
+| Classifier Model | Camera Target | Unseen Subjects Holdout Acc. | 5-Fold Group CV Acc. | Target Classification Classes |
+|---|---|---|---|---|
+| **Random Forest** | **Front Camera** | **100.00%** (F1: 1.000) | **100.00%** | `asymmetricalLean` vs `normal` |
+| **Random Forest** | **Side Camera(s)** | **62.50%** (F1: 0.595) | **67.50%** | `forwardHead`, `slouch`, `slidingDown` vs `normal` |
+
+*Complete evaluation reports, confusion matrices, and model provenance are preserved in [`ml-training/saved_models/model_metadata.json`](file:///d:/Rahul/9.Projects/7.%207th%20sem%20Minor%20Project/project/ml-training/saved_models/model_metadata.json).*
 
 ---
 
@@ -43,12 +47,15 @@ AI-Based-Postural-Health-Monitoring/
 ├── backend/                            # FastAPI Server & Python Backend
 │   ├── app/
 │   │   ├── main.py                     # Server entrypoint & WebSocket /ws/posture stream
-│   │   ├── camera/                     # Hardware camera discovery & capture manager
-│   │   ├── pose/                       # MediaPipe landmark & exact math feature extractor
-│   │   │   └── mediapipe_extractor.py
-│   │   └── inference/                  # Live ML Inference Engine & Fallback logic
-│   │       └── binary_logic.py
-│   └── requirements.txt                # Python backend dependencies
+│   │   ├── camera/                     # Hardware camera discovery service
+│   │   ├── pose/                       # Single source of truth canonical feature engine
+│   │   │   ├── canonical_features.py   # Shared mathematical feature extractor
+│   │   │   └── mediapipe_extractor.py  # Real-time feature calculation adapter
+│   │   ├── inference/                  # Live ML Inference Engine & Fallback logic
+│   │   │   └── binary_logic.py
+│   │   └── schemas/                    # Pydantic schemas for WebSocket validation
+│   │       └── posture_schema.py
+│   └── requirements.txt                # Pinned Python backend dependencies (scikit-learn==1.9.0)
 ├── frontend/                           # React 18 + Vite Dashboard Application
 │   ├── src/
 │   │   ├── components/                 # React UI Cards & Alert Modals
@@ -65,19 +72,24 @@ AI-Based-Postural-Health-Monitoring/
 │   ├── package.json
 │   └── tailwind.config.js              # Tailwind CSS v3 configuration
 ├── ml-training/                        # Dataset Pipeline & Training Scripts
-│   ├── build_features.py               # Math engine generating features_front.csv & features_side.csv
-│   ├── train_models.py                 # RF & SVM Model training and benchmarking
-│   ├── create_simple_plots.py          # EDA Plot generator (Bar & Scatter)
-│   └── saved_models/                   # Active Champion Models
+│   ├── build_features.py               # Math engine generating canonical feature CSVs
+│   ├── train_models.py                 # RF & SVM Model training and subject-wise benchmarking
+│   ├── create_new_eda_plots.py         # Canonical EDA Boxplot generator
+│   ├── create_simple_plots.py          # EDA Bar & Scatter plot generator
+│   ├── results/                        # Historical and latest training benchmark outputs
+│   └── saved_models/                   # Active Champion Models & Provenance Metadata
 │       ├── front_model.pkl
-│       └── side_model.pkl
+│       ├── side_model.pkl
+│       └── model_metadata.json
 ├── dataset/                            # Dataset & Plot Storage
-│   ├── master_dataset.csv              # Raw MediaPipe landmarks
-│   ├── features_front.csv              # Front ML dataset (80 rows)
-│   ├── features_side.csv               # Side ML dataset (160 rows)
+│   ├── master_dataset.csv              # Raw MediaPipe landmarks single source of truth
+│   ├── features_front.csv              # Canonical Front ML dataset (78 rows)
+│   ├── features_side.csv               # Canonical Side ML dataset (200 rows)
 │   └── eda_plots/                      # Exploratory Data Analysis PNGs
+├── tests/
+│   └── test_pipeline_consistency.py    # 10-point mathematical & architectural consistency test suite
 ├── docs/
-│   └── REPORT.md                       # Formal human-authored technical report
+│   └── REPORT.md                       # Formal technical report with verified results
 └── README.md                           # Comprehensive project overview
 ```
 

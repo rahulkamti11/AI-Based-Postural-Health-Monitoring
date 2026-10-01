@@ -1,70 +1,108 @@
 # Technical Report: AI-Based Sitting Posture Detection and Postural Health Monitoring System
 
 ## 1. Project Overview
-This project delivers a real-time, privacy-preserving, Multi-Camera Artificial Intelligence system to monitor sitting ergonomics. It leverages **MediaPipe** for local 3D skeleton extraction in the browser, reducing bandwidth to near zero, and a **FastAPI Machine Learning Backend** to enforce clinical biomechanical thresholds and classify specific postural defects using Random Forest models.
+This project delivers a real-time, privacy-preserving, Multi-Camera Artificial Intelligence platform to monitor sitting ergonomics. It leverages **MediaPipe Pose** executing locally within the browser (WebAssembly/WebGL) for real-time 3D skeleton keypoint extraction, ensuring user video feeds never leave the client machine. The extracted keypoints are streamed via **WebSocket** to a high-performance **FastAPI Machine Learning Backend**, which extracts canonical biomechanical angles, evaluates trained machine learning classifiers, and coordinates real-time ergonomic feedback.
 
 ---
 
 ## 2. System Architecture & Multi-Camera Fallback
 
-The system utilizes a **Graceful Degradation Multi-Camera Architecture**. A single camera cannot mathematically capture all posture defects (e.g., a 2D front webcam cannot measure Z-axis spine curvature). 
-To solve this, the pipeline is divided into camera-specific independent expert models:
+### 2.1 Unified Architecture Pipeline
+The end-to-end data flow operates through a decoupled, low-bandwidth architecture:
+```
+Camera Video Streams (Front, Left, Right)
+  → MediaPipe Pose Lite (Client Browser via WASM @ ~10 FPS)
+  → Keypoint Visibility Thresholding (>= 0.5)
+  → WebSocket JSON Stream (/ws/posture)
+  → Pydantic Schema Validation (backend/app/schemas/posture_schema.py)
+  → Shared Canonical Feature Engineering (backend/app/pose/canonical_features.py)
+  → Front & Side Champion ML Classifiers (Random Forest)
+  → Rule Engine Priority Fusion & 7-Frame Majority Voting (backend/app/inference/binary_logic.py)
+  → Frontend Live Telemetry Dashboard & Alert Modals
+```
+
+### 2.2 Independent Expert Camera Models
+A single camera cannot mathematically capture all postural defects (e.g., a 2D front webcam cannot reliably measure sagittal cervical flexion or lumbar slouching). The system therefore divides posture assessment into plane-specific expert models:
 
 1. **Front Camera Inference (Coronal Plane)**
-   - Physically capable of detecting left/right imbalances.
-   - **Target Labels:** symmetricalLean vs 
-ormal.
+   - Monitors lateral symmetry and coronal trunk lean.
+   - **Target Labels:** `asymmetricalLean` vs `normal`.
 2. **Side Camera Inference (Sagittal Plane)**
-   - Physically capable of detecting forward/backward spinal curves.
-   - **Target Labels:** orwardHead (Text Neck), slouch (Kyphosis), slidingDown (Posterior Tilt) vs 
-ormal.
+   - Monitors spinal flexion/extension, anterior head projection, and seat slippage.
+   - Supports Left, Right, or Dual-Side camera views with automated coordinate orientation normalization.
+   - **Target Labels:** `forwardHead` (Text-Neck), `slouch` (Thoracic Kyphosis), `slidingDown` (Sacral Sitting) vs `normal`.
 
-**Rule Engine Coordination (Backend):**
-The backend aggregates available data streams. If multiple cameras are active, it calculates features for each and runs respective models. If any camera detects a defect (e.g., Side detects orwardHead OR Front detects symmetricalLean), a ad overall quality alert is triggered. If only one camera is connected (e.g., just a laptop webcam), it gracefully falls back to monitoring only the defects visible to that single camera.
-
----
-
-## 3. Dataset Generation & Standardization
-Because high-quality medical multi-camera posture datasets are unavailable publicly, a multi-stage synthetic dataset was curated and expanded.
-
-### Phase 1: Initial Dataset (5 Subjects)
-- **Total Images:** 240 images (80 Front, 80 Left, 80 Right)
-- **Class Balance:** 120 Good Posture vs 120 Bad Posture.
-
-### Phase 2: Final Dataset (10 Subjects)
-- **Total Images:** 360 images (120 Front, 120 Left, 120 Right)
-- **Class Balance:** 120 Good Posture vs 240 Bad Posture.
-- **Naming Convention:** `{subject}_{camera}_{quality}_{posture_label}_{variation}.jpg` (e.g., `subject04_front_bad_asymmetricalLean_var1.jpg`).
+### 2.3 Multi-Camera Fusion Priority & Graceful Degradation
+- **Priority 1 (Sagittal Spinal Defects)**: If any active side camera detects `forwardHead`, `slouch`, or `slidingDown`, an overall `bad` quality alert is triggered immediately with targeted corrective feedback.
+- **Priority 2 (Coronal Lateral Defects)**: If side cameras report normal (or are offline) but the front camera detects `asymmetricalLean`, an overall `bad` quality alert is triggered.
+- **Priority 3 (Balanced Posture)**: When all active cameras detect normal alignment, overall quality is reported as `good` (`upright`).
+- **Graceful Fallback**: If only a single camera is connected (e.g., laptop webcam), the backend dynamically monitors defects observable in that plane without throwing errors. If key joints fall below the visibility threshold ($\ge 0.5$), the system transitions to `no_person`/`standby` without fabricating synthetic coordinates.
 
 ---
 
-## 4. Mathematical Feature Engineering (Trigonometry)
-Raw MediaPipe (X,Y,Z) coordinates are strictly converted into scale-invariant clinical angles before ML training.
+## 3. Dataset Specification
 
-### 4.1 Front Features (`features_front.csv`)
-1. **Shoulder Tilt Angle:** Derived via `atan2` on Left/Right Shoulder Y-X deltas. 
-2. **Torso Lateral Lean Angle:** Derived via `atan2` between the midpoint of shoulders and midpoint of hips.
-3. **Head Lateral Offset:** X-axis deviation of the nose from the shoulder midpoint.
-4. **Shoulder Symmetry Ratio:** Distance ratio from nose to left vs right shoulder.
+The curated multi-camera dataset consists of 10 diverse human subjects (`subject01` through `subject10`) performing standardized ergonomic sitting postures across front, left, and right camera views.
 
-### 4.2 Side Features (`features_side.csv`)
-1. **Neck Angle (CVA Proxy):** Vertical angle between Shoulder and Ear.
-2. **Torso Lean Angle:** Vertical angle between Hip and Shoulder.
-3. **Spine Curve Angle:** Computed via dot product (Cosine rule) of vectors (Hip->Shoulder) and (Shoulder->Ear) to detect slouching.
-4. **Head Forward Distance:** Normalized X-axis distance from ear to shoulder.
+- **Total Media Records**: 278 landmark image samples in `dataset/master_dataset.csv`.
+- **Front View**: 78 samples (38 `asymmetricalLean`, 40 `normal` [`upright`, `armrests`, `focus`, `recline`]).
+- **Side Views (Left & Right)**: 200 samples (40 `forwardHead`, 40 `slouch`, 40 `slidingDown`, 80 `normal`).
 
 ---
 
-## 5. Machine Learning Benchmarks & Validation
-Models were trained using Python `scikit-learn` on the engineered numerical features.
+## 4. Canonical Feature Engineering
 
-### 5.1 Front Model Evaluation (Asymmetrical Lean vs Normal)
-- **Phase 1 (5 Subjects) Accuracy:** **100.00%** 
-  - *Note:* Artificially high due to smaller sample size allowing the model to easily memorize distinct thresholds.
-- **Phase 2 (10 Subjects) Accuracy:** **91.67%** (Champion: Random Forest)
-  - *Note:* A highly robust, generalized model capable of identifying diverse body builds accurately. Achieved 100% recall on Asymmetrical Lean.
+All linear measurements are scale-normalized using anatomical body segments (`shoulder_width` for front features, `torso_length` for side features), rendering the system invariant to camera distance and image resolution.
 
-### 5.2 Side Model Evaluation (Forward Head, Slouch, Sliding Down vs Normal)
-- **Phase 1 (5 Subjects) Accuracy:** **81.25%**
-- **Phase 2 (10 Subjects) Accuracy:** **72.92%** (Champion: Random Forest)
-  - *Analysis:* Increased dataset diversity introduced necessary complexity. The model achieved 84% F1-Score on Forward Head. Minor confusion occurred between `slouch` and `slidingDown` due to visual similarities in spinal curvature, which is mathematically expected from a 2D side view.
+### 4.1 Front Biomechanical Features
+1. **`shoulder_tilt_abs`**: Absolute deviation of the inter-shoulder line from horizontal ($0^\circ = \text{level}$, alert at $> 7^\circ$).
+2. **`shoulder_symmetry_deviation`**: Absolute difference in Euclidean distance from nose to left vs right shoulder, normalized by shoulder width ($0.0 = \text{symmetric}$).
+3. **`head_lateral_offset_norm`**: Absolute horizontal displacement of nose from the inter-shoulder midpoint, normalized by shoulder width.
+4. **`torso_lean_abs`**: Absolute lateral inclination angle of the trunk vector (mid-hip to mid-shoulder) from vertical ($0^\circ = \text{upright}$, alert at $> 15^\circ$).
+
+### 4.2 Side Biomechanical Features
+1. **`neck_angle_abs`**: Absolute cervical inclination angle (shoulder to ear) relative to vertical ($s = \pm 1$ view-adjusted).
+2. **`torso_lean_abs`**: Absolute trunk incline angle (hip to shoulder) relative to vertical.
+3. **`head_forward_norm`**: Anterior horizontal projection of ear relative to shoulder, normalized by torso length.
+4. **`spine_deviation_angle`**: Biomechanical angle between the torso vector ($\vec{v}_{\text{hip}\to\text{shoulder}}$) and cervical vector ($\vec{v}_{\text{shoulder}\to\text{ear}}$).
+
+---
+
+## 5. Machine Learning Benchmarks & Validation Results
+
+### 5.1 Evaluation Methodology
+To prevent data leakage, evaluation is conducted **strictly subject-independent**:
+- **Holdout Test Set**: Unseen subjects `subject09` and `subject10` (never seen during training).
+- **Group Cross-Validation**: 5-Fold `GroupKFold` cross-validation partitioned by `subject_id`.
+- Models benchmarked: **Random Forest** (100 estimators) vs **Linear SVM** (with `StandardScaler`).
+
+### 5.2 Front Model Performance (`asymmetricalLean` vs `normal`)
+- **Holdout Test Accuracy (Unseen Subjects)**: **100.00%** (Random Forest & Linear SVM)
+- **Holdout F1-Macro**: **1.0000**
+- **5-Fold Group Cross-Validation Accuracy**: **100.00%**
+- **Confusion Matrix** on holdout test set ($N=16$):
+  - Normal: 8 / 8 correct (100% precision, 100% recall)
+  - Asymmetrical Lean: 8 / 8 correct (100% precision, 100% recall)
+- **Champion**: Random Forest (`saved_models/front_model.pkl`).
+
+### 5.3 Side Model Performance (`forwardHead`, `slouch`, `slidingDown` vs `normal`)
+- **Holdout Test Accuracy (Unseen Subjects)**: **62.50%** (Champion: Random Forest)
+- **Holdout F1-Macro**: **0.5954**
+- **5-Fold Group Cross-Validation Accuracy**: **67.50%** (Random Forest) / **73.00%** (Linear SVM)
+- **Holdout Classification Breakdown** ($N=40$ across unseen subjects):
+  - `normal`: Precision = 0.71, Recall = 0.75, F1 = 0.73 ($N=16$)
+  - `slidingDown`: Precision = 0.71, Recall = 0.62, F1 = 0.67 ($N=8$)
+  - `slouch`: Precision = 0.45, Recall = 0.62, F1 = 0.53 ($N=8$)
+  - `forwardHead`: Precision = 0.60, Recall = 0.38, F1 = 0.46 ($N=8$)
+- **Clinical Observation**: Biomechanical overlap between cervical kyphosis (`slouch`) and cervical protrusion (`forwardHead`) is clinically expected in 2D monocular side views, while trunk-dominant defect `slidingDown` and `normal` postures exhibit clear separability.
+
+---
+
+## 6. Implementation Integrity & Verification
+
+A dedicated verification test suite ([tests/test_pipeline_consistency.py](file:///d:/Rahul/9.Projects/7.%207th%20sem%20Minor%20Project/project/tests/test_pipeline_consistency.py)) validates the entire pipeline:
+1. **Mathematical Identity**: Verifies that offline feature extraction in `build_features.py` and live WebSocket extraction in `mediapipe_extractor.py` produce identical numerical features within $10^{-6}$ tolerance.
+2. **Zero Fabrication**: Verifies that frames with occluded hips or low visibility ($< 0.5$) return `None` rather than fabricating synthetic joints.
+3. **View Symmetry**: Verifies that Left and Right camera views produce identical positive forward head metrics for mirrored postures.
+4. **End-to-End Inference**: Validates live ML prediction outputs across deterministic normal and defective posture fixtures.
+5. **Multi-Camera Degradation**: Validates all fallback states (offline, no person, single front, single side, dual side, full trio).
