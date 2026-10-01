@@ -25,19 +25,43 @@ LANDMARK_NAMES = [
     "left_foot_index", "right_foot_index"
 ]
 
+KNOWN_POSTURE_LABELS = {
+    "asymmetricalLean", "forwardHead", "slouch", "slidingDown",
+    "armrests", "focus", "recline", "upright"
+}
+
 def parse_image_filename(filename):
     base = os.path.splitext(filename)[0]
     parts = base.split("_")
     if len(parts) < 5:
         return None
+
+    subject_id = parts[0]
+    camera_view = parts[1]
+    posture_quality = parts[2]
+    remaining = parts[3:]
+
+    label = None
+    variation = None
+    for known in KNOWN_POSTURE_LABELS:
+        if remaining[0].lower() == known.lower():
+            label = known
+            variation = "_".join(remaining[1:])
+            break
+
+    if label is None:
+        label = "_".join(parts[3:-1])
+        variation = parts[-1]
+
     return {
         "filename": filename,
-        "subject_id": parts[0],
-        "camera_view": parts[1],
-        "posture_quality": parts[2],
-        "posture_label": "_".join(parts[3:-1]),
-        "variation": parts[-1]
+        "subject_id": subject_id,
+        "camera_view": camera_view,
+        "posture_quality": posture_quality,
+        "posture_label": label,
+        "variation": variation
     }
+
 
 def extract_landmarks(image_path, pose_detector):
     img = cv2.imread(image_path)
