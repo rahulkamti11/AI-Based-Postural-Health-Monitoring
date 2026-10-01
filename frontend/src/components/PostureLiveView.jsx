@@ -34,11 +34,8 @@ export function PostureLiveView({ postureData, systemActive, sessionSeconds, goo
     showConfidence = false;
   }
 
-  const features = {
-    ...(postureData?.features_used?.front || {}),
-    ...(postureData?.features_used?.left || {}),
-    ...(postureData?.features_used?.right || {})
-  };
+  const frontFeats = postureData?.features_used?.front || {};
+  const sideFeats = postureData?.features_used?.left || postureData?.features_used?.right || {};
 
   const isFrontGood = !postureData || postureData.front_quality === 'good';
   const isSideGood = !postureData || postureData.side_quality === 'good';
@@ -150,10 +147,10 @@ export function PostureLiveView({ postureData, systemActive, sessionSeconds, goo
 
       </div>
 
-      {/* Live Feature Metrics */}
+      {/* Live Biomechanical Telemetry */}
       <div className="mt-5">
         <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center justify-between">
-          <span>Live Telemetry Streams</span>
+          <span>Live Biomechanical Telemetry</span>
           {systemActive && postureData?.decided_by && (
             <span className="flex items-center text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded text-[10px]">
               <Cpu size={10} className="mr-1" />
@@ -161,37 +158,84 @@ export function PostureLiveView({ postureData, systemActive, sessionSeconds, goo
             </span>
           )}
         </h4>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white/60 border border-slate-200/60 p-3.5 rounded-lg text-center backdrop-blur-sm">
-            <p className="text-xs text-slate-500 font-medium">Torso Lean Angle</p>
-            <p className={`text-lg font-bold mt-0.5 ${!systemActive ? 'text-slate-400' : 'text-slate-800'}`}>
-              {systemActive && features.torso_lateral_lean_angle !== undefined ? `${features.torso_lateral_lean_angle}°` : '--'}
-            </p>
-            <p className="text-[10px] text-slate-400 mt-0.5">&gt;15° Left / &lt;-15° Right</p>
-          </div>
 
-          <div className="bg-white/60 border border-slate-200/60 p-3.5 rounded-lg text-center backdrop-blur-sm">
-            <p className="text-xs text-slate-500 font-medium">Shoulder Tilt Angle</p>
-            <p className={`text-lg font-bold mt-0.5 ${!systemActive ? 'text-slate-400' : 'text-slate-800'}`}>
-              {systemActive && features.shoulder_tilt_angle !== undefined ? `${features.shoulder_tilt_angle}°` : '--'}
-            </p>
-            <p className="text-[10px] text-slate-400 mt-0.5">Level Baseline ≈ -170°</p>
-          </div>
+        {/* Front Camera Telemetry */}
+        <div className="mb-4">
+          <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2 block">
+            Front View Metrics (Coronal Plane)
+          </span>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-white/60 border border-slate-200/60 p-3.5 rounded-lg text-center backdrop-blur-sm">
+              <p className="text-xs text-slate-500 font-medium">Torso Lateral Lean</p>
+              <p className={`text-lg font-bold mt-0.5 ${!systemActive || frontFeats.torso_lean_abs === undefined ? 'text-slate-400' : 'text-slate-800'}`}>
+                {systemActive && frontFeats.torso_lean_abs !== undefined ? `${frontFeats.torso_lean_abs}°` : '--'}
+              </p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Threshold: &gt; 15.0° alert</p>
+            </div>
 
-          <div className="bg-white/60 border border-slate-200/60 p-3.5 rounded-lg text-center backdrop-blur-sm">
-            <p className="text-xs text-slate-500 font-medium">Head Lateral Offset</p>
-            <p className={`text-lg font-bold mt-0.5 ${!systemActive ? 'text-slate-400' : 'text-slate-800'}`}>
-              {systemActive && features.head_lateral_offset !== undefined ? `${features.head_lateral_offset}` : '--'}
-            </p>
-            <p className="text-[10px] text-slate-400 mt-0.5">Nose vs Shoulder Mid</p>
-          </div>
+            <div className="bg-white/60 border border-slate-200/60 p-3.5 rounded-lg text-center backdrop-blur-sm">
+              <p className="text-xs text-slate-500 font-medium">Shoulder Tilt Angle</p>
+              <p className={`text-lg font-bold mt-0.5 ${!systemActive || frontFeats.shoulder_tilt_abs === undefined ? 'text-slate-400' : 'text-slate-800'}`}>
+                {systemActive && frontFeats.shoulder_tilt_abs !== undefined ? `${frontFeats.shoulder_tilt_abs}°` : '--'}
+              </p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Level Baseline: 0.0°</p>
+            </div>
 
-          <div className="bg-white/60 border border-slate-200/60 p-3.5 rounded-lg text-center backdrop-blur-sm">
-            <p className="text-xs text-slate-500 font-medium">Symmetry Ratio</p>
-            <p className={`text-lg font-bold mt-0.5 ${!systemActive ? 'text-slate-400' : 'text-slate-800'}`}>
-              {systemActive && features.shoulder_symmetry_ratio !== undefined ? `${features.shoulder_symmetry_ratio}` : '--'}
-            </p>
-            <p className="text-[10px] text-slate-400 mt-0.5">L/R Ear Distance Ratio</p>
+            <div className="bg-white/60 border border-slate-200/60 p-3.5 rounded-lg text-center backdrop-blur-sm">
+              <p className="text-xs text-slate-500 font-medium">Head Lateral Offset</p>
+              <p className={`text-lg font-bold mt-0.5 ${!systemActive || frontFeats.head_lateral_offset_norm === undefined ? 'text-slate-400' : 'text-slate-800'}`}>
+                {systemActive && frontFeats.head_lateral_offset_norm !== undefined ? `${frontFeats.head_lateral_offset_norm}` : '--'}
+              </p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Norm. by Shoulder Width</p>
+            </div>
+
+            <div className="bg-white/60 border border-slate-200/60 p-3.5 rounded-lg text-center backdrop-blur-sm">
+              <p className="text-xs text-slate-500 font-medium">Symmetry Deviation</p>
+              <p className={`text-lg font-bold mt-0.5 ${!systemActive || frontFeats.shoulder_symmetry_deviation === undefined ? 'text-slate-400' : 'text-slate-800'}`}>
+                {systemActive && frontFeats.shoulder_symmetry_deviation !== undefined ? `${frontFeats.shoulder_symmetry_deviation}` : '--'}
+              </p>
+              <p className="text-[10px] text-slate-400 mt-0.5">0.0 = Balanced Shoulders</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Side Camera Telemetry */}
+        <div>
+          <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2 block">
+            Side View Metrics (Sagittal Plane)
+          </span>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-white/60 border border-slate-200/60 p-3.5 rounded-lg text-center backdrop-blur-sm">
+              <p className="text-xs text-slate-500 font-medium">Cervical Neck Angle</p>
+              <p className={`text-lg font-bold mt-0.5 ${!systemActive || sideFeats.neck_angle_abs === undefined ? 'text-slate-400' : 'text-slate-800'}`}>
+                {systemActive && sideFeats.neck_angle_abs !== undefined ? `${sideFeats.neck_angle_abs}°` : '--'}
+              </p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Text-Neck &ge; 45.0°</p>
+            </div>
+
+            <div className="bg-white/60 border border-slate-200/60 p-3.5 rounded-lg text-center backdrop-blur-sm">
+              <p className="text-xs text-slate-500 font-medium">Torso Recline Angle</p>
+              <p className={`text-lg font-bold mt-0.5 ${!systemActive || sideFeats.torso_lean_abs === undefined ? 'text-slate-400' : 'text-slate-800'}`}>
+                {systemActive && sideFeats.torso_lean_abs !== undefined ? `${sideFeats.torso_lean_abs}°` : '--'}
+              </p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Sliding Down &ge; 20.0°</p>
+            </div>
+
+            <div className="bg-white/60 border border-slate-200/60 p-3.5 rounded-lg text-center backdrop-blur-sm">
+              <p className="text-xs text-slate-500 font-medium">Head Forward Norm.</p>
+              <p className={`text-lg font-bold mt-0.5 ${!systemActive || sideFeats.head_forward_norm === undefined ? 'text-slate-400' : 'text-slate-800'}`}>
+                {systemActive && sideFeats.head_forward_norm !== undefined ? `${sideFeats.head_forward_norm}` : '--'}
+              </p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Norm. by Torso Length</p>
+            </div>
+
+            <div className="bg-white/60 border border-slate-200/60 p-3.5 rounded-lg text-center backdrop-blur-sm">
+              <p className="text-xs text-slate-500 font-medium">Spine Deviation Angle</p>
+              <p className={`text-lg font-bold mt-0.5 ${!systemActive || sideFeats.spine_deviation_angle === undefined ? 'text-slate-400' : 'text-slate-800'}`}>
+                {systemActive && sideFeats.spine_deviation_angle !== undefined ? `${sideFeats.spine_deviation_angle}°` : '--'}
+              </p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Thoracic Kyphosis Angle</p>
+            </div>
           </div>
         </div>
       </div>
