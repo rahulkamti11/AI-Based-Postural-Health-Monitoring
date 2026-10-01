@@ -1,21 +1,127 @@
 import os
+import math
 import pandas as pd
 import numpy as np
-import math
 
 MASTER_CSV = os.path.join("dataset", "master_dataset.csv")
 FRONT_CSV = os.path.join("dataset", "features_front.csv")
 SIDE_CSV = os.path.join("dataset", "features_side.csv")
 
-def distance(x1, y1, x2, y2):
-    return math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
+EPS = 1e-8
+META_COLS = ["filename", "subject_id", "camera_view", "posture_label", "posture_quality"]
 
-def calculate_angle_vertical(x1, y1, x2, y2):
-    # Angle from vertical (0 is straight up/down)
-    dx = abs(x2 - x1)
-    dy = abs(y2 - y1)
-    if dy == 0: return 90.0
-    return math.degrees(math.atan2(dx, dy))
+
+def distance(x1, y1, x2, y2):
+    return math.hypot(x2 - x1, y2 - y1)
+
+
+def angle_vertical(x1, y1, x2, y2):
+    """Signed angle from vertical (0 = straight up). Image y-axis points down."""
+    dx, dy = x2 - x1, y2 - y1
+    if abs(dx) < EPS and abs(dy) < EPS:
+        return np.nan
+    return math.degrees(math.atan2(dx, -dy))
+
+
+def angle_horizontal(x1, y1, x2, y2):
+    dx, dy = x2 - x1, y2 - y1
+    if abs(dx) < EPS and abs(dy) < EPS:
+        return np.nan
+    return math.degrees(math.atan2(dy, dx))
+
+
+def angle_between(v1x, v1y, v2x, v2y):
+    m1, m2 = math.hypot(v1x, v1y), math.hypot(v2x, v2y)
+    if m1 < EPS or m2 < EPS:
+        return np.nan
+    c = max(-1.0, min(1.0, (v1x * v2x + v1y * v2y) / (m1 * m2)))
+    return math.degrees(math.acos(c))
+
+
+def safe_ratio(a, b):
+    return a / b if abs(b) > EPS else np.nan
+
+
+def r(v, n):
+    return round(v, n) if not (isinstance(v, float) and math.isnan(v)) else np.nan
+
+
+def front_features(row):
+    lsx, lsy = row["left_shoulder_x"], row["left_shoulder_y"]
+    rsx, rsy = row["right_shoulder_x"], row["right_shoulder_y"]
+    lhx, lhy = row["left_hip_x"], row["left_hip_y"]
+    rhx, rhy = row["right_hip_x"], row["right_hip_y"]
+    nx, ny = row["nose_x"], row["nose_y"]
+
+    shoulder_width = distance(lsx, lsy, rsx, rsy)
+    msx, msy = (lsx + rsx) / 2, (lsy + rsy) / 2
+    mhx, mhy = (lhx + rhx) / 2, (lhy + rhy) / 2
+    torso_length = distance(mhx, mhy, msx, msy)
+
+    tilt = angle_horizontal(lsx, lsy, rsx, rsy)
+    lean = angle_vertical(mhx, mhy, msx, msy)
+
+    head_lat = nx - msx
+    head_vert = msy - ny
+
+    # Nose-to-shoulder distance asymmetry (0 = symmetric)
+    dl = distance(nx, ny, lsx, lsy)
+    dr = distance(nx, ny, rsx, rsy)
+    sym_signed = safe_ratio(dl - dr, shoulder_width)
+    sym_dev = abs(sym_signed)
+
+    return {
+        "shoulder_width": r(shoulder_width, 5),
+        "shoulder_tilt_signed": r(tilt, 4),
+        "shoulder_tilt_abs": r(abs(tilt), 4),
+        "shoulder_symmetry_signed": r(sym_signed, 5),
+        "shoulder_symmetry_deviation": r(sym_dev, 5),
+        "torso_length": r(torso_length, 5),
+        "torso_lean_signed": r(lean, 4),
+        "torso_lean_abs": r(abs(lean), 4),
+        "head_lateral_offset": r(head_lat, 5),
+        "head_lateral_offset_norm": r(safe_ratio(head_lat, shoulder_width), 5),
+        "head_vertical_offset": r(head_vert, 5),
+        "head_vertical_offset_norm": r(safe_ratio(head_vert, torso_length), 5),
+    }
+
+
+def side_features(row, view):
+    p = view + "_"
+    ear_x, ear_y = row[p + "ear_x"], row[p + "ear_y"]
+    sh_x, sh_y = row[p + "shoulder_x"], row[p + "shoulder_y"]
+    hip_x, hip_y = row[p + "hip_x"], row[p + "hip_y"]
+
+    # Mirror left view so "forward" is the same positive direction for both cameras
+    s = -1.0 if view == "left" else 1.0
+
+    torso_length = distance(sh_x, sh_y, hip_x, hip_y)
+    neck_length = distance(sh_x, sh_y, ear_x, ear_y)
+
+    torso_lean = s * angle_vertical(hip_x, hip_y, sh_x, sh_y)
+    neck_angle = s * angle_vertical(sh_x, sh_y, ear_x, ear_y)
+
+    head_forward = s * (ear_x - sh_x)
+    head_vertical = sh_y - ear_y
+
+    spine_dev = angle_between(sh_x - hip_x, sh_y - hip_y,
+                              ear_x - sh_x, ear_y - sh_y)
+
+    return {
+        "torso_length": r(torso_length, 5),
+        "torso_lean_signed": r(torso_lean, 4),
+        "torso_lean_abs": r(abs(torso_lean), 4),
+        "neck_length": r(neck_length, 5),
+        "neck_length_norm": r(safe_ratio(neck_length, torso_length), 5),
+        "neck_angle_signed": r(neck_angle, 4),
+        "neck_angle_abs": r(abs(neck_angle), 4),
+        "head_forward": r(head_forward, 5),
+        "head_forward_norm": r(safe_ratio(head_forward, torso_length), 5),
+        "head_vertical": r(head_vertical, 5),
+        "head_vertical_norm": r(safe_ratio(head_vertical, torso_length), 5),
+        "spine_deviation_angle": r(spine_dev, 4),
+    }
+
 
 def process_features():
     if not os.path.exists(MASTER_CSV):
@@ -23,104 +129,24 @@ def process_features():
         return
 
     df = pd.read_csv(MASTER_CSV)
-    
-    front_records = []
-    side_records = []
+    front, side = [], []
 
     for _, row in df.iterrows():
-        view = row['camera_view'].lower()
-        
-        # Base metadata
-        meta = {
-            'filename': row['filename'],
-            'subject_id': row['subject_id'],
-            'camera_view': row['camera_view'],
-            'posture_label': row['posture_label'],
-            'posture_quality': row['posture_quality']
-        }
-        
-        if view == 'front':
-            # Compute Front Features
-            try:
-                # 1. Shoulder Tilt Angle
-                dy_sh = abs(row['right_shoulder_y'] - row['left_shoulder_y'])
-                dx_sh = abs(row['right_shoulder_x'] - row['left_shoulder_x'])
-                tilt_angle = math.degrees(math.atan2(dy_sh, dx_sh)) if dx_sh != 0 else 90.0
-                
-                # 2. Shoulder Symmetry Ratio
-                dist_l = distance(row['nose_x'], row['nose_y'], row['left_shoulder_x'], row['left_shoulder_y'])
-                dist_r = distance(row['nose_x'], row['nose_y'], row['right_shoulder_x'], row['right_shoulder_y'])
-                sym_ratio = dist_l / dist_r if dist_r != 0 else 1.0
-                
-                # 3. Head Lateral Offset
-                mid_shoulder_x = (row['left_shoulder_x'] + row['right_shoulder_x']) / 2.0
-                head_offset = row['nose_x'] - mid_shoulder_x
-                
-                # 4. Torso Lateral Lean Angle
-                mid_hip_x = (row['left_hip_x'] + row['right_hip_x']) / 2.0
-                mid_hip_y = (row['left_hip_y'] + row['right_hip_y']) / 2.0
-                mid_shoulder_y = (row['left_shoulder_y'] + row['right_shoulder_y']) / 2.0
-                torso_lean = calculate_angle_vertical(mid_hip_x, mid_hip_y, mid_shoulder_x, mid_shoulder_y)
+        view = str(row["camera_view"]).lower()
+        meta = {c: row[c] for c in META_COLS}
+        try:
+            if view == "front":
+                front.append({**meta, **front_features(row)})
+            elif view in ("left", "right"):
+                side.append({**meta, **side_features(row, view)})
+        except Exception as e:
+            print(f"Feature error ({view}) - {row['filename']}: {e}")
 
-                record = meta.copy()
-                record.update({
-                    'shoulder_tilt_angle': round(tilt_angle, 4),
-                    'shoulder_symmetry_ratio': round(sym_ratio, 4),
-                    'head_lateral_offset': round(head_offset, 4),
-                    'torso_lateral_lean_angle': round(torso_lean, 4)
-                })
-                front_records.append(record)
-            except Exception as e:
-                print(f"Error calculating front features for {row['filename']}: {e}")
-                
-        elif view in ['left', 'right']:
-            # Compute Side Features (Combine Left and Right logic)
-            try:
-                prefix = view + "_"
-                ear_x, ear_y = row[f'{prefix}ear_x'], row[f'{prefix}ear_y']
-                sh_x, sh_y = row[f'{prefix}shoulder_x'], row[f'{prefix}shoulder_y']
-                hip_x, hip_y = row[f'{prefix}hip_x'], row[f'{prefix}hip_y']
+    pd.DataFrame(front).to_csv(FRONT_CSV, index=False)
+    pd.DataFrame(side).to_csv(SIDE_CSV, index=False)
+    print(f"Saved {len(front)} front records to {FRONT_CSV}")
+    print(f"Saved {len(side)} side records to {SIDE_CSV}")
 
-                # 1. Neck Angle (Vertical)
-                neck_angle = calculate_angle_vertical(sh_x, sh_y, ear_x, ear_y)
-                
-                # 2. Torso Lean Angle (Vertical)
-                torso_lean = calculate_angle_vertical(hip_x, hip_y, sh_x, sh_y)
-                
-                # 3. Head Forward Distance (normalized by torso length)
-                torso_len = distance(sh_x, sh_y, hip_x, hip_y)
-                head_fwd_dist = abs(ear_x - sh_x) / torso_len if torso_len != 0 else 0
-                
-                # 4. Spine Curve Angle
-                # Angle between vector(hip->shoulder) and vector(shoulder->ear)
-                v1_x, v1_y = sh_x - hip_x, sh_y - hip_y
-                v2_x, v2_y = ear_x - sh_x, ear_y - sh_y
-                dot_prod = (v1_x * v2_x) + (v1_y * v2_y)
-                mag1 = math.sqrt(v1_x**2 + v1_y**2)
-                mag2 = math.sqrt(v2_x**2 + v2_y**2)
-                if mag1 * mag2 == 0:
-                    spine_curve = 180.0
-                else:
-                    cos_val = max(min(dot_prod / (mag1 * mag2), 1.0), -1.0)
-                    spine_curve = 180.0 - math.degrees(math.acos(cos_val))
-
-                record = meta.copy()
-                record.update({
-                    'neck_angle': round(neck_angle, 4),
-                    'torso_lean_angle': round(torso_lean, 4),
-                    'head_forward_dist': round(head_fwd_dist, 4),
-                    'spine_curve_angle': round(spine_curve, 4)
-                })
-                side_records.append(record)
-            except Exception as e:
-                print(f"Error calculating side features for {row['filename']}: {e}")
-
-    # Save to CSV
-    pd.DataFrame(front_records).to_csv(FRONT_CSV, index=False)
-    print(f"Saved {len(front_records)} front-view records to {FRONT_CSV}")
-    
-    pd.DataFrame(side_records).to_csv(SIDE_CSV, index=False)
-    print(f"Saved {len(side_records)} side-view records to {SIDE_CSV}")
 
 if __name__ == "__main__":
     process_features()

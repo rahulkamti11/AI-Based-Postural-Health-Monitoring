@@ -60,7 +60,7 @@ def main():
     # The front camera can ONLY see left/right asymmetry. Everything else looks "normal" to it.
     df_front['target'] = df_front['posture_label'].apply(lambda x: 'asymmetricalLean' if x == 'asymmetricalLean' else 'normal')
     
-    front_features = ['shoulder_tilt_angle', 'shoulder_symmetry_ratio', 'head_lateral_offset', 'torso_lateral_lean_angle']
+    front_features = ['shoulder_tilt_abs', 'shoulder_symmetry_deviation', 'head_lateral_offset_norm', 'torso_lean_abs']
     train_and_evaluate(df_front, front_features, 'target', 'front')
 
     # --- SIDE MODEL ---
@@ -69,7 +69,7 @@ def main():
     side_targets = ['slouch', 'forwardHead', 'slidingDown']
     df_side['target'] = df_side['posture_label'].apply(lambda x: x if x in side_targets else 'normal')
     
-    side_features = ['neck_angle', 'torso_lean_angle', 'head_forward_dist', 'spine_curve_angle']
+    side_features = ['neck_angle_abs', 'torso_lean_abs', 'head_forward_norm', 'spine_deviation_angle']
     train_and_evaluate(df_side, side_features, 'target', 'side')
 
 if __name__ == "__main__":

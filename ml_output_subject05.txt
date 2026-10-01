@@ -2,10 +2,10 @@
 ========================================
 Results for FRONT MODEL
 ========================================
-Random Forest Accuracy : 81.25%
+Random Forest Accuracy : 68.75%
 SVM (Linear) Accuracy  : 81.25%
 
-Champion: Random Forest
+Champion: SVM
 
 Classification Report:
                   precision    recall  f1-score   support
